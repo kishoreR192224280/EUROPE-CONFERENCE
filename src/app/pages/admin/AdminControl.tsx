@@ -21,6 +21,7 @@ export function AdminControl() {
   if (!currentSession) return <div>No active session</div>;
 
   const currentQuestion = currentSession.questions[currentSession.currentQuestionIndex];
+  const shouldOfferLeaderboard = currentSession.status !== "leaderboard" && currentQuestion.showLeaderboardAfter;
 
   const launchQuestion = () => {
     const nextIndex = currentSession.currentQuestionIndex + 1;
@@ -237,10 +238,14 @@ export function AdminControl() {
                     
                     <div className="mt-auto flex justify-center gap-4">
                       <button 
-                        onClick={launchQuestion}
+                        onClick={shouldOfferLeaderboard ? showLeaderboardView : launchQuestion}
                         className="px-10 py-4 bg-indigo-600 text-white font-black text-lg rounded-2xl hover:bg-indigo-700 transition-all flex items-center gap-3 shadow-xl shadow-indigo-100 active:scale-95"
                       >
-                        {currentSession.currentQuestionIndex + 1 === currentSession.questions.length ? "Finish Quiz" : "Next Question"}
+                        {currentSession.currentQuestionIndex + 1 === currentSession.questions.length
+                          ? "Finish Quiz"
+                          : shouldOfferLeaderboard
+                            ? "Show Leaderboard"
+                            : "Next Question"}
                         <SkipForward size={24} fill="currentColor" />
                       </button>
                     </div>

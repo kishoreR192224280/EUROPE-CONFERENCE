@@ -1,9 +1,32 @@
+import { useEffect, useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router";
+import { ADMIN_USER_STORAGE_KEY, adminLogout } from "../api/adminAuth";
 import { LayoutDashboard, PlusCircle, Radio, BarChart3, Settings, LogOut, Search, Bell, User } from "lucide-react";
+
+type StoredAdminUser = {
+  id: number;
+  name: string;
+  username: string;
+};
 
 export function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [adminUser, setAdminUser] = useState<StoredAdminUser | null>(null);
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem(ADMIN_USER_STORAGE_KEY);
+
+    if (!storedUser) {
+      return;
+    }
+
+    try {
+      setAdminUser(JSON.parse(storedUser) as StoredAdminUser);
+    } catch {
+      localStorage.removeItem(ADMIN_USER_STORAGE_KEY);
+    }
+  }, []);
 
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", href: "/admin/dashboard" },
@@ -43,7 +66,14 @@ export function AdminLayout() {
         </nav>
 
         <div className="p-4 border-t border-gray-200">
-          <button onClick={() => navigate("/")} className="flex items-center gap-3 px-4 py-3 w-full text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors">
+          <button
+            onClick={async () => {
+              await adminLogout();
+              localStorage.removeItem(ADMIN_USER_STORAGE_KEY);
+              navigate("/");
+            }}
+            className="flex items-center gap-3 px-4 py-3 w-full text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors"
+          >
             <LogOut size={20} />
             Logout
           </button>
@@ -72,7 +102,7 @@ export function AdminLayout() {
             </button>
             <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
               <div className="text-right">
-                <p className="text-sm font-semibold">Alex Rivera</p>
+                <p className="text-sm font-semibold">{adminUser?.name ?? "Admin User"}</p>
                 <p className="text-xs text-gray-500">Super Admin</p>
               </div>
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white border-2 border-white shadow-sm">

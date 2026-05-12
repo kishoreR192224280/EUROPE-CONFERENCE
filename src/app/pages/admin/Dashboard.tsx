@@ -17,8 +17,8 @@ export function Dashboard() {
   const navigate = useNavigate();
 
   const stats = [
-    { label: "Total Sessions", value: "124", change: "+12%", icon: BarChart, color: "blue" },
-    { label: "Active Sessions", value: "3", change: "Live now", icon: Play, color: "green" },
+    
+    
     { label: "Total Students", value: "2,840", change: "+4.5%", icon: Users, color: "purple" },
     { label: "Avg Score", value: "78%", change: "+2%", icon: BarChart, color: "orange" },
   ];
@@ -73,35 +73,7 @@ export function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Sessions Activity Chart */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="font-bold text-gray-900">Sessions Activity</h3>
-            <select className="text-sm border-none bg-gray-50 rounded-lg py-1 px-3 outline-none">
-              <option>Last 7 Days</option>
-              <option>Last 30 Days</option>
-            </select>
-          </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#9ca3af", fontSize: 12 }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#9ca3af", fontSize: 12 }} dx={-10} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="sessions" 
-                  stroke="#2563eb" 
-                  strokeWidth={3} 
-                  dot={{ r: 4, fill: "#2563eb", strokeWidth: 2, stroke: "#fff" }}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+  
 
         {/* Recent Sessions */}
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">

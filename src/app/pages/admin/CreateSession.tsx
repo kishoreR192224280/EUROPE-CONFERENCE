@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Plus, Trash2, GripVertical, Image as ImageIcon, Youtube, Clock, Check, ChevronDown, ChevronUp } from "lucide-react";
-import { motion, Reorder } from "motion/react";
+import { motion } from "motion/react";
 import { useSession, Question } from "../../context/SessionContext";
 import { toast } from "sonner";
+import { createSession } from "../../api/sessionApi";
 
 export function CreateSession() {
   const navigate = useNavigate();
@@ -15,7 +16,8 @@ export function CreateSession() {
       text: "",
       options: ["", "", "", ""],
       correctAnswer: 0,
-      timer: 30
+      timer: 30,
+      showLeaderboardAfter: true,
     }
   ]);
 
@@ -24,6 +26,7 @@ export function CreateSession() {
     description: "",
     videoLink: "",
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const addQuestion = () => {
     setQuestions([
@@ -33,7 +36,8 @@ export function CreateSession() {
         text: "",
         options: ["", "", "", ""],
         correctAnswer: 0,
-        timer: 30
+        timer: 30,
+        showLeaderboardAfter: true,
       }
     ]);
   };
@@ -59,27 +63,51 @@ export function CreateSession() {
     }));
   };
 
-  const handleSave = () => {
+  const validateQuestions = () => {
+    for (const [index, question] of questions.entries()) {
+      if (!question.text.trim()) {
+        toast.error(`Please enter text for question ${index + 1}`);
+        return false;
+      }
+
+      if (question.options.length !== 4 || question.options.some((option) => !option.trim())) {
+        toast.error(`Please complete all 4 options for question ${index + 1}`);
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const handleSave = async (status: "draft" | "waiting") => {
     if (!sessionInfo.title) {
       toast.error("Please enter a session title");
       return;
     }
 
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const newSession = {
-      id: Math.random().toString(36).substring(2, 10),
-      code,
-      title: sessionInfo.title,
-      description: sessionInfo.description,
-      questions,
-      status: "waiting" as const,
-      currentQuestionIndex: -1,
-      participants: 0,
-    };
+    if (!validateQuestions()) {
+      return;
+    }
 
-    setSession(newSession);
-    toast.success("Session created successfully!");
-    navigate(`/admin/session/${newSession.id}/success`);
+    setIsSubmitting(true);
+
+    try {
+      const newSession = await createSession({
+        title: sessionInfo.title.trim(),
+        description: sessionInfo.description.trim(),
+        youtubeUrl: sessionInfo.videoLink.trim(),
+        status,
+        questions,
+      });
+
+      setSession(newSession);
+      toast.success(status === "draft" ? "Session draft saved successfully!" : "Session created successfully!");
+      navigate(`/admin/session/${newSession.id}/success`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save session");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -90,14 +118,19 @@ export function CreateSession() {
           <p className="text-gray-500">Design your interactive experience.</p>
         </div>
         <div className="flex gap-3">
-          <button className="px-6 py-2.5 bg-white border border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors">
+          <button
+            onClick={() => void handleSave("draft")}
+            disabled={isSubmitting}
+            className="px-6 py-2.5 bg-white border border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-60"
+          >
             Save as Draft
           </button>
           <button 
-            onClick={handleSave}
-            className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-md shadow-blue-100"
+            onClick={() => void handleSave("waiting")}
+            disabled={isSubmitting}
+            className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-md shadow-blue-100 disabled:opacity-60"
           >
-            Create Session
+            {isSubmitting ? "Saving..." : "Create Session"}
           </button>
         </div>
       </div>
@@ -304,7 +337,13 @@ function QuestionCard({
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <input type="checkbox" id={`leaderboard-${question.id}`} className="rounded text-blue-600" defaultChecked />
+              <input
+                type="checkbox"
+                id={`leaderboard-${question.id}`}
+                className="rounded text-blue-600"
+                checked={question.showLeaderboardAfter}
+                onChange={(e) => onUpdate({ showLeaderboardAfter: e.target.checked })}
+              />
               <label htmlFor={`leaderboard-${question.id}`} className="text-sm font-medium text-gray-600">
                 Show leaderboard after this question
               </label>

@@ -1,22 +1,24 @@
 import { createContext, useContext, useState, ReactNode } from "react";
 
 export interface Question {
-  id: string;
+  id: string | number;
   text: string;
   options: string[];
   correctAnswer: number;
   timer: number;
+  showLeaderboardAfter: boolean;
 }
 
 export interface Session {
-  id: string;
+  id: string | number;
   code: string;
   title: string;
   description: string;
   videoUrl?: string;
   thumbnailUrl?: string;
+  introVideoUrl?: string;
   questions: Question[];
-  status: "waiting" | "active" | "results" | "leaderboard" | "ended";
+  status: "draft" | "scheduled" | "waiting" | "active" | "results" | "leaderboard" | "ended" | "archived";
   currentQuestionIndex: number;
   participants: number;
 }
