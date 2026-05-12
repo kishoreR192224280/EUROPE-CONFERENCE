@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ADMIN_USER_STORAGE_KEY, adminLogin } from "../../api/adminAuth";
 import { useNavigate } from "react-router";
 import { Mail, Lock, ArrowRight, Github } from "lucide-react";
 import { ImageWithFallback } from "../../components/figma/ImageWithFallback";
@@ -7,13 +8,25 @@ import { motion } from "motion/react";
 export function Login() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     setIsLoading(true);
-    setTimeout(() => {
-      navigate("/admin/dashboard");
-    }, 1500);
+    try {
+      const res = await adminLogin(username, password);
+      if (res.success) {
+        localStorage.setItem(ADMIN_USER_STORAGE_KEY, JSON.stringify(res.user));
+        navigate("/admin/dashboard");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -35,14 +48,16 @@ export function Login() {
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Username</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   required
-                  type="email"
-                  placeholder="admin@example.com"
+                  type="text"
+                  placeholder="Enter your username"
                   className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
+                  value={username}
+                  onChange={e => setUsername(e.target.value)}
                 />
               </div>
             </div>
@@ -59,9 +74,15 @@ export function Login() {
                   type="password"
                   placeholder="••••••••"
                   className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
                 />
               </div>
             </div>
+
+            {error && (
+              <div className="text-red-600 text-sm font-medium text-center">{error}</div>
+            )}
 
             <button
               type="submit"

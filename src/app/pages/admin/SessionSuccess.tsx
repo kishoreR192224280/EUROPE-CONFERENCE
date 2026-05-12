@@ -12,6 +12,7 @@ export function SessionSuccess() {
   if (!currentSession) return null;
 
   const joinLink = `https://quiz.pro/join/${currentSession.code}`;
+  const isDraft = currentSession.status === "draft";
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -28,8 +29,14 @@ export function SessionSuccess() {
         >
           <Check size={40} strokeWidth={3} />
         </motion.div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Session Created Successfully!</h1>
-        <p className="text-gray-500 text-lg">Your session "{currentSession.title}" is ready to go live.</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          {isDraft ? "Session Draft Saved!" : "Session Created Successfully!"}
+        </h1>
+        <p className="text-gray-500 text-lg">
+          {isDraft
+            ? `Your draft "${currentSession.title}" has been saved and can be launched later.`
+            : `Your session "${currentSession.title}" is ready to go live.`}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
