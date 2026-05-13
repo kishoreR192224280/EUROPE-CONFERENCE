@@ -1,29 +1,120 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
-import { User, IdCard, Play, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router";
+import { User, IdCard, Play, Users, ArrowLeft } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
+import { useSession } from "../../context/SessionContext";
+import { getPublicSession, joinLiveSession, participantStorageKey } from "../../api/liveSessionApi";
 
 export function StudentJoin() {
   const navigate = useNavigate();
+  const { code: routeCode } = useParams();
+  const { setSession } = useSession();
   const [formData, setFormData] = useState({
     name: "",
-    rollNumber: "",
-    code: ""
+    registerNumber: "",
+    code: routeCode?.toUpperCase() ?? ""
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(Boolean(routeCode));
+  const [sessionTitle, setSessionTitle] = useState("");
+  const [isSessionUnavailable, setIsSessionUnavailable] = useState(false);
 
-  const handleJoin = (e: React.FormEvent) => {
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      code: routeCode?.toUpperCase() ?? prev.code,
+    }));
+  }, [routeCode]);
+
+  useEffect(() => {
+    if (!routeCode) {
+      setSessionTitle("");
+      setIsSessionUnavailable(false);
+      setIsCheckingSession(false);
+      return;
+    }
+
+    const normalizedCode = routeCode.toUpperCase();
+    const existingParticipant = sessionStorage.getItem(participantStorageKey(normalizedCode));
+    if (existingParticipant) {
+      navigate(`/join/${normalizedCode}/waiting`, { replace: true });
+      return;
+    }
+
+    let isMounted = true;
+    setIsCheckingSession(true);
+
+    const loadSession = async () => {
+      try {
+        const session = await getPublicSession(normalizedCode);
+        if (!isMounted) {
+          return;
+        }
+
+        setSessionTitle(session.title);
+        setIsSessionUnavailable(false);
+      } catch (err) {
+        if (!isMounted) {
+          return;
+        }
+
+        setSessionTitle("");
+        setIsSessionUnavailable(true);
+        toast.error(err instanceof Error ? err.message : "Session not found");
+      } finally {
+        if (isMounted) {
+          setIsCheckingSession(false);
+        }
+      }
+    };
+
+    void loadSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [navigate, routeCode]);
+
+  const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.code) {
+
+    const normalizedCode = formData.code.trim().toUpperCase();
+    if (!normalizedCode) {
       toast.error("Please enter a session code");
       return;
     }
+
+    if (!formData.name.trim()) {
+      toast.error("Please enter your name");
+      return;
+    }
+
+    if (!formData.registerNumber.trim()) {
+      toast.error("Please enter your register number");
+      return;
+    }
+
     setIsLoading(true);
-    // Mock join delay
-    setTimeout(() => {
-      navigate(`/student/session/${formData.code.toUpperCase()}`);
-    }, 1200);
+
+    try {
+      const response = await joinLiveSession({
+        code: normalizedCode,
+        name: formData.name.trim(),
+        registerNumber: formData.registerNumber.trim(),
+      });
+
+      sessionStorage.setItem(
+        participantStorageKey(normalizedCode),
+        JSON.stringify(response.participant)
+      );
+      setSession(response.session);
+      navigate(`/join/${normalizedCode}/waiting`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to join session");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -32,9 +123,43 @@ export function StudentJoin() {
         <div className="w-16 h-16 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-3xl font-bold mx-auto mb-4 shadow-xl shadow-indigo-100">
           Q
         </div>
-        <h1 className="text-2xl font-black text-gray-900">Join Session</h1>
-        <p className="text-gray-500 mt-1">Enter your details to start the quiz.</p>
+        <h1 className="text-2xl font-black text-gray-900">
+          {routeCode ? "Join This Session" : "Join Session"}
+        </h1>
+        <p className="text-gray-500 mt-1">
+          {routeCode
+            ? "Enter your details once to join the live quiz."
+            : "Enter the session code and your details to start the quiz."}
+        </p>
       </div>
+
+      {routeCode && (
+        <div className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-500">Session Code</p>
+              <p className="mt-1 text-lg font-black text-indigo-900">{routeCode.toUpperCase()}</p>
+              <p className="mt-1 text-sm text-indigo-700">
+                {isCheckingSession
+                  ? "Checking session details..."
+                  : sessionTitle
+                    ? `Joining "${sessionTitle}"`
+                    : isSessionUnavailable
+                      ? "This session code could not be found or is not available."
+                      : "Ready to join."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/join")}
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-indigo-700 shadow-sm"
+            >
+              <ArrowLeft size={16} />
+              Change
+            </button>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleJoin} className="space-y-6">
         <div className="space-y-4">
@@ -46,8 +171,13 @@ export function StudentJoin() {
               type="text"
               placeholder="Session Code (e.g. ABC123)"
               value={formData.code}
-              onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-              className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-indigo-600 focus:bg-white outline-none transition-all font-black uppercase tracking-widest text-lg"
+              onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+              readOnly={Boolean(routeCode)}
+              className={`w-full pl-12 pr-4 py-4 border-2 rounded-2xl outline-none transition-all font-black uppercase tracking-widest text-lg ${
+                routeCode
+                  ? "bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed"
+                  : "bg-gray-50 border-gray-100 focus:border-indigo-600 focus:bg-white"
+              }`}
               required
             />
           </div>
@@ -72,9 +202,9 @@ export function StudentJoin() {
             </div>
             <input
               type="text"
-              placeholder="Roll Number / ID"
-              value={formData.rollNumber}
-              onChange={(e) => setFormData({ ...formData, rollNumber: e.target.value })}
+              placeholder="Register Number"
+              value={formData.registerNumber}
+              onChange={(e) => setFormData({ ...formData, registerNumber: e.target.value })}
               className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-indigo-600 focus:bg-white outline-none transition-all font-bold"
               required
             />
@@ -83,8 +213,8 @@ export function StudentJoin() {
 
         <button
           type="submit"
-          disabled={isLoading}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-5 rounded-2xl shadow-xl shadow-indigo-200 transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
+          disabled={isLoading || isCheckingSession || isSessionUnavailable}
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-5 rounded-2xl shadow-xl shadow-indigo-200 transition-all flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {isLoading ? (
             <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -104,16 +234,9 @@ export function StudentJoin() {
               <Users size={20} />
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-900">4.2k+</p>
-              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Players Today</p>
+              <p className="text-sm font-bold text-gray-900">Live Check-in</p>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Name + Register Number saved for leaderboard</p>
             </div>
-          </div>
-          <div className="flex -space-x-2">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-gray-300 overflow-hidden">
-                <img src={`https://i.pravatar.cc/100?u=${i}`} alt="user" />
-              </div>
-            ))}
           </div>
         </div>
       </div>

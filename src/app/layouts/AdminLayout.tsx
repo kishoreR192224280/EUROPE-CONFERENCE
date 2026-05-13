@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router";
 import { ADMIN_USER_STORAGE_KEY, adminLogout } from "../api/adminAuth";
+import { ACTIVE_ADMIN_SESSION_ID_STORAGE_KEY, useSession } from "../context/SessionContext";
 import { LayoutDashboard, PlusCircle, Radio, BarChart3, Settings, LogOut, Search, Bell, User } from "lucide-react";
+import { toast } from "sonner";
 
 type StoredAdminUser = {
   id: number;
@@ -12,7 +14,9 @@ type StoredAdminUser = {
 export function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { currentSession } = useSession();
   const [adminUser, setAdminUser] = useState<StoredAdminUser | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     const storedUser = localStorage.getItem(ADMIN_USER_STORAGE_KEY);
@@ -28,10 +32,21 @@ export function AdminLayout() {
     }
   }, []);
 
+  useEffect(() => {
+    if (currentSession?.id !== undefined && currentSession?.id !== null) {
+      const nextId = String(currentSession.id);
+      setActiveSessionId(nextId);
+      localStorage.setItem(ACTIVE_ADMIN_SESSION_ID_STORAGE_KEY, nextId);
+      return;
+    }
+
+    setActiveSessionId(localStorage.getItem(ACTIVE_ADMIN_SESSION_ID_STORAGE_KEY));
+  }, [currentSession?.id]);
+
   const menuItems = [
     { icon: LayoutDashboard, label: "Dashboard", href: "/admin/dashboard" },
     { icon: PlusCircle, label: "Create Session", href: "/admin/create-session" },
-    { icon: Radio, label: "Live Sessions", href: "/admin/session/current/control" },
+    { icon: Radio, label: "Live Sessions", href: activeSessionId ? `/admin/session/${activeSessionId}/control` : null },
     { icon: BarChart3, label: "Reports", href: "/admin/reports" },
   ];
 
@@ -50,18 +65,33 @@ export function AdminLayout() {
         
         <nav className="flex-1 p-4 space-y-1">
           {menuItems.map((item) => (
-            <Link
-              key={item.href}
-              to={item.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-                location.pathname === item.href
-                  ? "bg-blue-50 text-blue-600 font-medium"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              <item.icon size={20} />
-              {item.label}
-            </Link>
+            item.href ? (
+              <Link
+                key={item.label}
+                to={item.href}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+                  location.pathname === item.href
+                    ? "bg-blue-50 text-blue-600 font-medium"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <item.icon size={20} />
+                {item.label}
+              </Link>
+            ) : (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => {
+                  toast.info("Create or reopen a session to access live controls.");
+                  navigate("/admin/create-session");
+                }}
+                className="flex w-full items-center gap-3 px-4 py-3 rounded-xl transition-colors text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <item.icon size={20} />
+                {item.label}
+              </button>
+            )
           ))}
         </nav>
 

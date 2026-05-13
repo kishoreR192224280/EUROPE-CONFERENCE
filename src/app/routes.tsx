@@ -18,6 +18,16 @@ export const router = createBrowserRouter([
     element: <Login />,
   },
   {
+    path: "/join",
+    element: <StudentLayout />,
+    children: [
+      { index: true, element: <StudentJoin /> },
+      { path: ":code", element: <StudentJoin /> },
+      { path: ":code/waiting", element: <StudentWaiting /> },
+      { path: ":code/question", element: <StudentQuestion /> },
+    ],
+  },
+  {
     path: "/admin",
     element: <AdminLayout />,
     children: [

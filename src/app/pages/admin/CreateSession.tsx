@@ -13,8 +13,29 @@ export function CreateSession() {
   const [questions, setQuestions] = useState<Question[]>([
     {
       id: "1",
-      text: "",
-      options: ["", "", "", ""],
+      text: "Which planet is known as the Red Planet?",
+      options: ["Mars", "Venus", "Jupiter", "Mercury"],
+      correctAnswer: 0,
+      timer: 30,
+      showLeaderboardAfter: true,
+    },
+    {
+      id: "2",
+      text: "What does HTML stand for?",
+      options: [
+        "HyperText Markup Language",
+        "HighText Machine Language",
+        "Hyper Transfer Markdown Language",
+        "Home Tool Markup Language"
+      ],
+      correctAnswer: 0,
+      timer: 20,
+      showLeaderboardAfter: true,
+    },
+    {
+      id: "3",
+      text: "Which team communication platform is commonly used for workplace collaboration?",
+      options: ["Slack", "Photoshop", "Excel", "Figma"],
       correctAnswer: 0,
       timer: 30,
       showLeaderboardAfter: true,
@@ -22,8 +43,8 @@ export function CreateSession() {
   ]);
 
   const [sessionInfo, setSessionInfo] = useState({
-    title: "",
-    description: "",
+    title: "Team 7",
+    description: "Sample quiz session for Team 7 with ready-made questions for quick testing.",
     videoLink: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);

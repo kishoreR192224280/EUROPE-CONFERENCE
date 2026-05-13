@@ -1,10 +1,12 @@
 import { createContext, useContext, useState, ReactNode } from "react";
 
+export const ACTIVE_ADMIN_SESSION_ID_STORAGE_KEY = "activeAdminSessionId";
+
 export interface Question {
   id: string | number;
   text: string;
   options: string[];
-  correctAnswer: number;
+  correctAnswer?: number;
   timer: number;
   showLeaderboardAfter: boolean;
 }
@@ -18,9 +20,47 @@ export interface Session {
   thumbnailUrl?: string;
   introVideoUrl?: string;
   questions: Question[];
+  questionCount?: number;
   status: "draft" | "scheduled" | "waiting" | "active" | "results" | "leaderboard" | "ended" | "archived";
+  currentQuestionId?: string | number | null;
   currentQuestionIndex: number;
+  currentQuestion?: Question | null;
+  questionStartedAt?: string | null;
   participants: number;
+  participantSummary?: {
+    id: number;
+    name: string;
+    registerNumber: string | null;
+    score: number;
+    rank: number;
+    participantCount: number;
+    answersSubmitted: number;
+    correctAnswers: number;
+    totalResponseTimeMs: number;
+  } | null;
+  leaderboard?: Array<{
+    id: number;
+    name: string;
+    registerNumber: string | null;
+    score: number;
+    rank: number;
+  }>;
+  liveFeed?: Array<{
+    id: number;
+    name: string;
+    registerNumber: string | null;
+    score: number;
+    hasAnsweredCurrentQuestion: boolean;
+    selectedOptionIndex: number | null;
+    activityLabel: string;
+    presence: "active" | "waiting" | "idle";
+    lastActivityAt: string | null;
+  }>;
+  liveMetrics?: {
+    totalParticipants: number;
+    answeredParticipants: number;
+    waitingParticipants: number;
+  };
 }
 
 interface SessionContextType {
@@ -34,9 +74,32 @@ const SessionContext = createContext<SessionContextType | undefined>(undefined);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
 
-  const setSession = (session: Session) => setCurrentSession(session);
+  const setSession = (session: Session) => {
+    setCurrentSession(session);
+
+    if (typeof window !== "undefined" && session?.id !== undefined && session?.id !== null) {
+      window.localStorage.setItem(
+        ACTIVE_ADMIN_SESSION_ID_STORAGE_KEY,
+        String(session.id)
+      );
+    }
+  };
   const updateSession = (updates: Partial<Session>) => {
-    setCurrentSession((prev) => (prev ? { ...prev, ...updates } : null));
+    setCurrentSession((prev) => {
+      if (!prev) {
+        return null;
+      }
+
+      const nextSession = { ...prev, ...updates };
+      if (typeof window !== "undefined" && nextSession.id !== undefined && nextSession.id !== null) {
+        window.localStorage.setItem(
+          ACTIVE_ADMIN_SESSION_ID_STORAGE_KEY,
+          String(nextSession.id)
+        );
+      }
+
+      return nextSession;
+    });
   };
 
   return (

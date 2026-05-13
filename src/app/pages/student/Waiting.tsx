@@ -3,18 +3,78 @@ import { useParams, useNavigate } from "react-router";
 import { Loader2, Users, CheckCircle2 } from "lucide-react";
 import { motion } from "motion/react";
 import { useSession } from "../../context/SessionContext";
+import { getPublicSession, participantStorageKey } from "../../api/liveSessionApi";
+import { StudentSessionEnded } from "./StudentSessionEnded";
 
 export function StudentWaiting() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { currentSession } = useSession();
+  const { currentSession, setSession } = useSession();
+  const participantJson = code ? sessionStorage.getItem(participantStorageKey(code)) : null;
+  const participant = participantJson
+    ? (JSON.parse(participantJson) as { name?: string; registerNumber?: string | null })
+    : null;
 
-  // Simulate waiting for question launch
   useEffect(() => {
-    if (currentSession?.status === "active") {
-      navigate(`/student/session/${code}/question`);
+    if (!code) {
+      return;
     }
-  }, [currentSession?.status, code, navigate]);
+
+    const participant = sessionStorage.getItem(participantStorageKey(code));
+    if (!participant) {
+      navigate(`/join/${code}`, { replace: true });
+      return;
+    }
+
+    const participantToken = (() => {
+      try {
+        return (JSON.parse(participant) as { token?: string }).token ?? "";
+      } catch {
+        return "";
+      }
+    })();
+
+    let isMounted = true;
+
+    const loadSession = async () => {
+      try {
+        const session = await getPublicSession(code, participantToken);
+        if (!isMounted) {
+          return;
+        }
+
+        setSession(session);
+        if (session.status === "active") {
+          navigate(`/join/${code}/question`);
+        }
+      } catch {
+        // Keep the waiting page mounted on transient network errors.
+      }
+    };
+
+    void loadSession();
+    const intervalId = window.setInterval(() => {
+      void loadSession();
+    }, 3000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, [code, navigate, setSession]);
+
+  if (currentSession?.status === "ended") {
+    return (
+      <StudentSessionEnded
+        code={code}
+        title={currentSession.title}
+        participantName={participant?.name}
+        registerNumber={participant?.registerNumber}
+        participantSummary={currentSession.participantSummary}
+        leaderboard={currentSession.leaderboard}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col items-center p-8 pb-12 text-center min-h-[400px] justify-center">
@@ -49,7 +109,9 @@ export function StudentWaiting() {
 
         <div className="flex items-center justify-center gap-4 text-gray-400">
           <Users size={20} />
-          <span className="text-sm font-bold uppercase tracking-wider">32 players waiting</span>
+          <span className="text-sm font-bold uppercase tracking-wider">
+            {currentSession?.participantSummary?.participantCount ?? currentSession?.participants ?? 0} players waiting
+          </span>
         </div>
       </div>
 

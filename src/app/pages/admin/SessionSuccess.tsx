@@ -11,7 +11,7 @@ export function SessionSuccess() {
 
   if (!currentSession) return null;
 
-  const joinLink = `https://quiz.pro/join/${currentSession.code}`;
+  const joinLink = `${window.location.origin}/join/${currentSession.code}`;
   const isDraft = currentSession.status === "draft";
 
   const copyToClipboard = (text: string) => {

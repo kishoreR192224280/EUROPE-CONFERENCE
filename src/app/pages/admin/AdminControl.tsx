@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
-import { Play, Pause, Square, Users, SkipForward, BarChart2, Award, ArrowRight, LayoutDashboard, QrCode as QrIcon } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { Link, useParams } from "react-router";
+import { Play, Pause, Users, SkipForward, BarChart2, Award, ArrowRight, LayoutDashboard, QrCode as QrIcon, Eye, Clock3, CheckCircle2 } from "lucide-react";
+import { motion } from "motion/react";
 import { useSession } from "../../context/SessionContext";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { toast } from "sonner";
+import { getAdminSession, updateAdminSessionState } from "../../api/liveSessionApi";
 
 const MOCK_STATS = [
   { name: "A", count: 12, color: "#3b82f6" },
@@ -13,56 +15,178 @@ const MOCK_STATS = [
 ];
 
 export function AdminControl() {
-  const { currentSession, updateSession } = useSession();
-  const [isQuestionActive, setIsQuestionActive] = useState(false);
+  const { id } = useParams();
+  const { currentSession, setSession } = useSession();
   const [timeLeft, setTimeLeft] = useState(0);
-  const [showResults, setShowResults] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const normalizedSessionId = id && /^\d+$/.test(id) ? id : null;
 
-  if (!currentSession) return <div>No active session</div>;
-
-  const currentQuestion = currentSession.questions[currentSession.currentQuestionIndex];
-  const shouldOfferLeaderboard = currentSession.status !== "leaderboard" && currentQuestion.showLeaderboardAfter;
-
-  const launchQuestion = () => {
-    const nextIndex = currentSession.currentQuestionIndex + 1;
-    if (nextIndex < currentSession.questions.length) {
-      updateSession({ currentQuestionIndex: nextIndex, status: "active" });
-      setIsQuestionActive(true);
-      setShowResults(false);
-      setTimeLeft(currentSession.questions[nextIndex].timer);
-      toast.success(`Question ${nextIndex + 1} launched!`);
-    } else {
-      updateSession({ status: "ended" });
-      toast.info("Session completed!");
+  useEffect(() => {
+    if (!normalizedSessionId) {
+      setLoadError("No active live session was selected.");
+      return;
     }
-  };
 
-  const revealResults = () => {
-    setIsQuestionActive(false);
-    setShowResults(true);
-    updateSession({ status: "results" });
-    toast.info("Results revealed to players");
-  };
+    let isMounted = true;
 
-  const showLeaderboardView = () => {
-    updateSession({ status: "leaderboard" });
-    toast.info("Leaderboard displayed on big screen");
-  };
+    const loadSession = async () => {
+      try {
+        const session = await getAdminSession(normalizedSessionId);
+        if (isMounted) {
+          setLoadError("");
+          setSession(session);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setLoadError(err instanceof Error ? err.message : "Failed to load session");
+        }
+      }
+    };
 
-  const endSession = () => {
-    updateSession({ status: "ended" });
-    toast.error("Session ended");
+    void loadSession();
+    const intervalId = window.setInterval(() => {
+      void loadSession();
+    }, 3000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, [normalizedSessionId, setSession]);
+
+  const currentQuestion = currentSession
+    ? currentSession.currentQuestion ?? currentSession.questions[currentSession.currentQuestionIndex]
+    : null;
+  const isQuestionActive = currentSession?.status === "active";
+  const isSessionEnded = currentSession?.status === "ended";
+  const shouldOfferLeaderboard =
+    !!currentQuestion &&
+    currentSession?.status !== "leaderboard" &&
+    currentQuestion.showLeaderboardAfter;
+
+  const formatLastActivity = (value: string | null) => {
+    if (!value) {
+      return "No recent activity";
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return "Recently active";
+    }
+
+    const diffSeconds = Math.max(0, Math.floor((Date.now() - parsed.getTime()) / 1000));
+    if (diffSeconds < 10) {
+      return "Just now";
+    }
+    if (diffSeconds < 60) {
+      return `${diffSeconds}s ago`;
+    }
+
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    if (diffMinutes < 60) {
+      return `${diffMinutes}m ago`;
+    }
+
+    const diffHours = Math.floor(diffMinutes / 60);
+    return `${diffHours}h ago`;
   };
 
   useEffect(() => {
-    let timer: any;
-    if (isQuestionActive && timeLeft > 0) {
-      timer = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
-    } else if (timeLeft === 0 && isQuestionActive) {
-      revealResults();
+    if (!isQuestionActive || !currentQuestion || !currentSession?.questionStartedAt) {
+      return;
     }
-    return () => clearInterval(timer);
-  }, [isQuestionActive, timeLeft]);
+
+    const syncTimer = () => {
+      const startedAtMs = new Date(currentSession.questionStartedAt as string).getTime();
+      const elapsedSeconds = Math.floor((Date.now() - startedAtMs) / 1000);
+      setTimeLeft(Math.max(0, currentQuestion.timer - elapsedSeconds));
+    };
+
+    syncTimer();
+    const timer = window.setInterval(syncTimer, 1000);
+    return () => window.clearInterval(timer);
+  }, [currentQuestion, currentSession?.questionStartedAt, isQuestionActive]);
+
+  if (!normalizedSessionId) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+        <h2 className="text-xl font-bold text-gray-900">No Live Session Selected</h2>
+        <p className="mt-2 text-gray-500">Create a session or open one from the success screen to manage it here.</p>
+        <Link
+          to="/admin/create-session"
+          className="mt-6 inline-flex rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white"
+        >
+          Create Session
+        </Link>
+      </div>
+    );
+  }
+
+  if (!currentSession) return <div>No active session</div>;
+
+  const liveFeed = currentSession.liveFeed ?? [];
+  const liveMetrics = currentSession.liveMetrics ?? {
+    totalParticipants: currentSession.participants,
+    answeredParticipants: 0,
+    waitingParticipants: currentSession.participants,
+  };
+
+  if (loadError) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+        <h2 className="text-xl font-bold text-gray-900">Unable to Load Session</h2>
+        <p className="mt-2 text-gray-500">{loadError}</p>
+        <Link
+          to="/admin/dashboard"
+          className="mt-6 inline-flex rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white"
+        >
+          Back to Dashboard
+        </Link>
+      </div>
+    );
+  }
+
+  const sendAction = async (
+    action: "launch_next" | "reveal_results" | "show_leaderboard" | "end",
+    successMessage: string
+  ) => {
+    if (!normalizedSessionId) {
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      const session = await updateAdminSessionState(normalizedSessionId, action);
+      setSession(session);
+      toast.success(successMessage);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update session");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const launchQuestion = () => {
+    const nextQuestionNumber = currentSession.currentQuestionIndex + 2;
+    const isFinishing = currentSession.currentQuestionIndex + 1 >= currentSession.questions.length;
+    void sendAction("launch_next", isFinishing ? "Session completed!" : `Question ${nextQuestionNumber} launched!`);
+  };
+
+  const revealResults = () => {
+    void sendAction("reveal_results", "Results revealed to players");
+  };
+
+  const showLeaderboardView = () => {
+    void sendAction("show_leaderboard", "Leaderboard displayed on big screen");
+  };
+
+  const endSession = () => {
+    if (isSessionEnded) {
+      return;
+    }
+    void sendAction("end", "Session ended");
+  };
 
   return (
     <div className="space-y-6">
@@ -76,7 +200,7 @@ export function AdminControl() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg font-bold">
               <Users size={18} />
-              <span>{currentSession.participants + 42}</span>
+              <span>{currentSession.participants}</span>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg font-bold">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
@@ -87,13 +211,15 @@ export function AdminControl() {
         <div className="flex gap-3">
           <button 
             onClick={endSession}
-            className="px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 font-semibold transition-colors text-gray-600"
+            disabled={isBusy || isSessionEnded}
+            className="px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 font-semibold transition-colors text-gray-600 disabled:opacity-60"
           >
             End Session
           </button>
           <button 
             onClick={showLeaderboardView}
-            className="px-4 py-2 bg-amber-500 text-white rounded-xl hover:bg-amber-600 font-semibold shadow-md shadow-amber-100 flex items-center gap-2 transition-all active:scale-95"
+            disabled={isBusy}
+            className="px-4 py-2 bg-amber-500 text-white rounded-xl hover:bg-amber-600 font-semibold shadow-md shadow-amber-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60"
           >
             <Award size={18} />
             Show Leaderboard
@@ -102,7 +228,6 @@ export function AdminControl() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Control Area */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm min-h-[450px] flex flex-col relative overflow-hidden">
             {currentSession.status === "waiting" && currentSession.currentQuestionIndex === -1 ? (
@@ -117,12 +242,13 @@ export function AdminControl() {
                 <div className="max-w-md">
                   <h3 className="text-3xl font-bold text-gray-900">Get the party started!</h3>
                   <p className="text-gray-500 mt-3 text-lg">
-                    {currentSession.participants + 42} participants are waiting in the lobby. Launch the first question when you're ready.
+                    {currentSession.participants} participants are waiting in the lobby. Launch the first question when you're ready.
                   </p>
                 </div>
                 <button 
                   onClick={launchQuestion}
-                  className="px-10 py-4 bg-indigo-600 text-white font-black text-lg rounded-2xl hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 flex items-center gap-3 active:scale-95"
+                  disabled={isBusy}
+                  className="px-10 py-4 bg-indigo-600 text-white font-black text-lg rounded-2xl hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 flex items-center gap-3 active:scale-95 disabled:opacity-60"
                 >
                   Launch Question 1
                   <ArrowRight size={24} />
@@ -145,7 +271,7 @@ export function AdminControl() {
                   <BarChart2 size={20} />
                 </button>
               </div>
-            ) : (
+            ) : currentQuestion ? (
               <div className="flex-1 flex flex-col">
                 <div className="flex items-start justify-between mb-8">
                   <div className="flex-1">
@@ -194,7 +320,8 @@ export function AdminControl() {
                     <div className="mt-auto flex justify-center gap-4">
                       <button 
                         onClick={revealResults}
-                        className="px-8 py-4 bg-gray-900 text-white font-bold rounded-2xl hover:bg-gray-800 transition-all flex items-center gap-3 shadow-xl shadow-gray-200"
+                        disabled={isBusy}
+                        className="px-8 py-4 bg-gray-900 text-white font-bold rounded-2xl hover:bg-gray-800 transition-all flex items-center gap-3 shadow-xl shadow-gray-200 disabled:opacity-60"
                       >
                         <Pause size={20} fill="currentColor" />
                         Stop Timer & Reveal
@@ -239,7 +366,8 @@ export function AdminControl() {
                     <div className="mt-auto flex justify-center gap-4">
                       <button 
                         onClick={shouldOfferLeaderboard ? showLeaderboardView : launchQuestion}
-                        className="px-10 py-4 bg-indigo-600 text-white font-black text-lg rounded-2xl hover:bg-indigo-700 transition-all flex items-center gap-3 shadow-xl shadow-indigo-100 active:scale-95"
+                        disabled={isBusy}
+                        className="px-10 py-4 bg-indigo-600 text-white font-black text-lg rounded-2xl hover:bg-indigo-700 transition-all flex items-center gap-3 shadow-xl shadow-indigo-100 active:scale-95 disabled:opacity-60"
                       >
                         {currentSession.currentQuestionIndex + 1 === currentSession.questions.length
                           ? "Finish Quiz"
@@ -252,11 +380,10 @@ export function AdminControl() {
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
           </div>
         </div>
 
-        {/* Sidebar / Live Feed */}
         <div className="space-y-6">
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
             <h3 className="font-black text-gray-900 mb-4 flex items-center justify-between">
@@ -265,25 +392,81 @@ export function AdminControl() {
                 {isQuestionActive ? "Voting Open" : "Standby"}
               </span>
             </h3>
-            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-              {[...Array(6)].map((_, i) => (
+            <div className="mb-4 grid grid-cols-3 gap-3">
+              <div className="rounded-xl bg-indigo-50 p-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Joined</p>
+                <p className="mt-1 text-xl font-black text-indigo-700">{liveMetrics.totalParticipants}</p>
+              </div>
+              <div className="rounded-xl bg-emerald-50 p-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Answered</p>
+                <p className="mt-1 text-xl font-black text-emerald-700">{liveMetrics.answeredParticipants}</p>
+              </div>
+              <div className="rounded-xl bg-amber-50 p-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">Waiting</p>
+                <p className="mt-1 text-xl font-black text-amber-700">{liveMetrics.waitingParticipants}</p>
+              </div>
+            </div>
+            <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
+              {liveFeed.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center">
+                  <Users size={24} className="mx-auto text-gray-300" />
+                  <p className="mt-3 text-sm font-bold text-gray-900">No participant activity yet</p>
+                  <p className="mt-1 text-xs font-medium text-gray-500">
+                    Joined students and answer submissions will appear here in real time.
+                  </p>
+                </div>
+              ) : liveFeed.map((entry, i) => (
                 <motion.div 
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  key={i} 
-                  className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-transparent hover:border-indigo-100 transition-all"
+                  transition={{ delay: i * 0.06 }}
+                  key={entry.id} 
+                  className="flex items-center gap-3 rounded-2xl border border-transparent bg-gray-50 p-3 transition-all hover:border-indigo-100 hover:bg-white"
                 >
-                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full border-2 border-white shadow-sm flex items-center justify-center text-white text-xs font-bold">
-                    {String.fromCharCode(65 + i)}
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-gradient-to-br from-indigo-500 to-purple-600 text-xs font-bold text-white shadow-sm">
+                    {entry.name
+                      .split(" ")
+                      .map((part) => part[0] ?? "")
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase()}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-black text-gray-900 truncate">Student_{1234 + i}</p>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">
-                      {isQuestionActive ? "Just submitted answer A" : "Waiting for next round"}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-xs font-black text-gray-900">{entry.name}</p>
+                      {entry.selectedOptionIndex !== null ? (
+                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-indigo-600">
+                          {String.fromCharCode(65 + entry.selectedOptionIndex)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="truncate text-[10px] font-bold uppercase tracking-tight text-gray-500">
+                      {entry.activityLabel}
                     </p>
+                    <div className="mt-1 flex items-center gap-3 text-[10px] font-semibold text-gray-400">
+                      <span>{entry.registerNumber ?? "No reg no."}</span>
+                      <span>{formatLastActivity(entry.lastActivityAt)}</span>
+                    </div>
                   </div>
-                  <div className={`w-2 h-2 rounded-full ${isQuestionActive ? "bg-emerald-500 animate-pulse" : "bg-gray-300"}`}></div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-xs font-black text-gray-700">{entry.score} pts</span>
+                    <div className="flex items-center gap-1">
+                      {entry.presence === "active" ? (
+                        <CheckCircle2 size={14} className="text-emerald-500" />
+                      ) : entry.presence === "waiting" ? (
+                        <Eye size={14} className="text-amber-500" />
+                      ) : (
+                        <Clock3 size={14} className="text-gray-300" />
+                      )}
+                      <span className={`h-2 w-2 rounded-full ${
+                        entry.presence === "active"
+                          ? "bg-emerald-500"
+                          : entry.presence === "waiting"
+                            ? "bg-amber-400"
+                            : "bg-gray-300"
+                      }`}></span>
+                    </div>
+                  </div>
                 </motion.div>
               ))}
             </div>
