@@ -6,13 +6,21 @@ import { useSession } from "../../context/SessionContext";
 import { getPublicSession, participantStorageKey } from "../../api/liveSessionApi";
 import { StudentSessionEnded } from "./StudentSessionEnded";
 
+function getResumeRoute(code: string, status?: string) {
+  if (status === "waiting" || status === "draft" || status === "scheduled") {
+    return `/join/${code}/waiting`;
+  }
+
+  return `/join/${code}/question`;
+}
+
 export function StudentWaiting() {
   const { code } = useParams();
   const navigate = useNavigate();
   const { currentSession, setSession } = useSession();
   const participantJson = code ? sessionStorage.getItem(participantStorageKey(code)) : null;
   const participant = participantJson
-    ? (JSON.parse(participantJson) as { name?: string; registerNumber?: string | null })
+    ? (JSON.parse(participantJson) as { name?: string; phoneNumber?: string | null })
     : null;
 
   useEffect(() => {
@@ -44,8 +52,9 @@ export function StudentWaiting() {
         }
 
         setSession(session);
-        if (session.status === "active") {
-          navigate(`/join/${code}/question`);
+        const resumeRoute = getResumeRoute(code, session.status);
+        if (resumeRoute !== `/join/${code}/waiting`) {
+          navigate(resumeRoute, { replace: true });
         }
       } catch {
         // Keep the waiting page mounted on transient network errors.
@@ -63,13 +72,26 @@ export function StudentWaiting() {
     };
   }, [code, navigate, setSession]);
 
+  if (!currentSession) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center p-8 text-center">
+        <div className="space-y-3">
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-indigo-600" />
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-gray-400">
+            Restoring your session...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (currentSession?.status === "ended") {
     return (
       <StudentSessionEnded
         code={code}
         title={currentSession.title}
         participantName={participant?.name}
-        registerNumber={participant?.registerNumber}
+        phoneNumber={participant?.phoneNumber}
         participantSummary={currentSession.participantSummary}
         leaderboard={currentSession.leaderboard}
       />

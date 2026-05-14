@@ -76,20 +76,17 @@ export function BigScreen() {
   }, [currentSession?.status]);
 
   useEffect(() => {
-    if (view !== "question" || !currentSession?.currentQuestion || !currentSession.questionStartedAt) {
+    if (view !== "question" || !currentSession?.currentQuestion) {
       return;
     }
 
-    const syncTimer = () => {
-      const startedAtMs = new Date(currentSession.questionStartedAt as string).getTime();
-      const elapsedSeconds = Math.floor((Date.now() - startedAtMs) / 1000);
-      setTimeLeft(Math.max(0, currentSession.currentQuestion!.timer - elapsedSeconds));
-    };
+    setTimeLeft(currentSession.timeRemainingSeconds ?? currentSession.currentQuestion.timer);
+    const timer = window.setInterval(() => {
+      setTimeLeft((prev) => Math.max(0, prev - 1));
+    }, 1000);
 
-    syncTimer();
-    const timer = window.setInterval(syncTimer, 1000);
     return () => window.clearInterval(timer);
-  }, [view, currentSession?.questionStartedAt, currentSession?.currentQuestion]);
+  }, [view, currentSession?.currentQuestion, currentSession?.timeRemainingSeconds]);
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-white overflow-hidden flex flex-col p-12 relative">
@@ -317,7 +314,7 @@ export function BigScreen() {
                         <div className="space-y-1">
                           <span className="block text-4xl font-black tracking-tight">{item.name}</span>
                           <span className="block text-sm font-black uppercase tracking-[0.24em] text-slate-500">
-                            {item.registerNumber ?? "Participant"}
+                            {item.phoneNumber ?? "Participant"}
                           </span>
                         </div>
                       </div>

@@ -93,20 +93,17 @@ export function AdminControl() {
   };
 
   useEffect(() => {
-    if (!isQuestionActive || !currentQuestion || !currentSession?.questionStartedAt) {
+    if (!isQuestionActive || !currentQuestion) {
       return;
     }
 
-    const syncTimer = () => {
-      const startedAtMs = new Date(currentSession.questionStartedAt as string).getTime();
-      const elapsedSeconds = Math.floor((Date.now() - startedAtMs) / 1000);
-      setTimeLeft(Math.max(0, currentQuestion.timer - elapsedSeconds));
-    };
+    setTimeLeft(currentSession.timeRemainingSeconds ?? currentQuestion.timer);
+    const timer = window.setInterval(() => {
+      setTimeLeft((prev) => Math.max(0, prev - 1));
+    }, 1000);
 
-    syncTimer();
-    const timer = window.setInterval(syncTimer, 1000);
     return () => window.clearInterval(timer);
-  }, [currentQuestion, currentSession?.questionStartedAt, isQuestionActive]);
+  }, [currentQuestion, currentSession?.timeRemainingSeconds, isQuestionActive]);
 
   if (!normalizedSessionId) {
     return (
@@ -444,7 +441,7 @@ export function AdminControl() {
                       {entry.activityLabel}
                     </p>
                     <div className="mt-1 flex items-center gap-3 text-[10px] font-semibold text-gray-400">
-                      <span>{entry.registerNumber ?? "No reg no."}</span>
+                      <span>{entry.phoneNumber ?? "No phone saved"}</span>
                       <span>{formatLastActivity(entry.lastActivityAt)}</span>
                     </div>
                   </div>

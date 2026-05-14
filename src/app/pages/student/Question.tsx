@@ -14,12 +14,13 @@ export function StudentQuestion() {
   
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [hasRecordedTimeout, setHasRecordedTimeout] = useState(false);
   const [timeLeft, setTimeLeft] = useState(30);
   const [isFinished, setIsFinished] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const participantJson = code ? sessionStorage.getItem(participantStorageKey(code)) : null;
   const participant = participantJson
-    ? (JSON.parse(participantJson) as { name?: string; registerNumber?: string | null })
+    ? (JSON.parse(participantJson) as { name?: string; phoneNumber?: string | null })
     : null;
   const currentQuestion = currentSession
     ? currentSession.currentQuestion ?? currentSession.questions[currentSession.currentQuestionIndex]
@@ -27,12 +28,13 @@ export function StudentQuestion() {
   const totalQuestions = currentSession
     ? currentSession.questionCount ?? currentSession.questions.length
     : 0;
+  const currentQuestionResponse = currentSession?.currentQuestionResponse ?? null;
   const hasAnswerReveal =
     currentSession?.status === "results" ||
     currentSession?.status === "leaderboard" ||
     currentSession?.status === "ended";
 
-  const submitAnswer = async (optionIndex: number) => {
+  const submitAnswer = async (optionIndex: number | null, markAsSubmitted = true) => {
     if (!code || !currentQuestion) {
       return;
     }
@@ -53,7 +55,8 @@ export function StudentQuestion() {
         questionId: currentQuestion.id,
         selectedOptionIndex: optionIndex,
       });
-      setHasSubmitted(true);
+      setHasSubmitted(markAsSubmitted);
+      setHasRecordedTimeout(!markAsSubmitted);
       setIsFinished(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to submit answer");
@@ -113,8 +116,20 @@ export function StudentQuestion() {
   useEffect(() => {
     setSelectedOption(null);
     setHasSubmitted(false);
+    setHasRecordedTimeout(false);
     setIsFinished(false);
   }, [currentSession?.currentQuestionId]);
+
+  useEffect(() => {
+    if (!currentQuestionResponse) {
+      return;
+    }
+
+    setSelectedOption(currentQuestionResponse.selectedOptionIndex);
+    setHasSubmitted(true);
+    setHasRecordedTimeout(currentQuestionResponse.selectedOptionIndex === null);
+    setIsFinished(true);
+  }, [currentQuestionResponse?.id]);
 
   useEffect(() => {
     if (!currentSession || !currentQuestion) {
@@ -127,48 +142,45 @@ export function StudentQuestion() {
       return;
     }
 
-    const syncTimer = () => {
-      if (!currentSession.questionStartedAt) {
-        setTimeLeft(currentQuestion.timer);
-        return;
-      }
+    setTimeLeft(currentSession.timeRemainingSeconds ?? currentQuestion.timer);
+    const intervalId = window.setInterval(() => {
+      setTimeLeft((prev) => {
+        const next = Math.max(0, prev - 1);
+        if (next === 0) {
+          setIsFinished(true);
+        }
+        return next;
+      });
+    }, 1000);
 
-      const startedAtMs = new Date(currentSession.questionStartedAt).getTime();
-      const elapsedSeconds = Math.floor((Date.now() - startedAtMs) / 1000);
-      const remaining = Math.max(0, currentQuestion.timer - elapsedSeconds);
-      setTimeLeft(remaining);
+    if ((currentSession.timeRemainingSeconds ?? currentQuestion.timer) === 0) {
+      setIsFinished(true);
+    }
 
-      if (remaining === 0) {
-        setIsFinished(true);
-      }
-    };
-
-    syncTimer();
-    const intervalId = window.setInterval(syncTimer, 1000);
     return () => window.clearInterval(intervalId);
-  }, [currentQuestion, currentSession?.questionStartedAt, currentSession?.status]);
+  }, [currentQuestion, currentSession?.status, currentSession?.timeRemainingSeconds]);
 
   useEffect(() => {
     if (!currentSession || !currentQuestion || currentSession.status !== "active") {
       return;
     }
 
-    if (timeLeft > 0 || hasSubmitted || isSubmitting) {
+    if (currentQuestionResponse) {
       return;
     }
 
-    if (selectedOption !== null) {
-      void submitAnswer(selectedOption);
+    if (timeLeft > 0 || hasSubmitted || hasRecordedTimeout || isSubmitting) {
       return;
     }
 
-    setIsFinished(true);
+    void submitAnswer(null, false);
   }, [
     currentQuestion,
+    currentQuestionResponse,
     currentSession,
+    hasRecordedTimeout,
     hasSubmitted,
     isSubmitting,
-    selectedOption,
     timeLeft,
   ]);
 
@@ -180,7 +192,7 @@ export function StudentQuestion() {
         code={code}
         title={currentSession.title}
         participantName={participant?.name}
-        registerNumber={participant?.registerNumber}
+        phoneNumber={participant?.phoneNumber}
         participantSummary={currentSession.participantSummary}
         leaderboard={currentSession.leaderboard}
       />
@@ -198,6 +210,10 @@ export function StudentQuestion() {
 
   const isCorrect =
     hasAnswerReveal && selectedOption !== null && selectedOption === currentQuestion.correctAnswer;
+  const showRevealResult = hasSubmitted && hasAnswerReveal;
+  const timedOutWithoutAnswer = hasRecordedTimeout && !hasSubmitted;
+  const hasSubmittedAnswer = hasSubmitted || Boolean(currentQuestionResponse);
+  const waitingForReveal = hasSubmittedAnswer && !hasAnswerReveal && !timedOutWithoutAnswer;
 
   return (
     <div className="flex flex-col min-h-[500px]">
@@ -266,13 +282,13 @@ export function StudentQuestion() {
             className="flex-1 flex flex-col items-center justify-center text-center py-10"
           >
             <div className={`w-24 h-24 rounded-[2rem] flex items-center justify-center mb-6 shadow-2xl ${
-              hasAnswerReveal
+              showRevealResult
                 ? isCorrect
                   ? "bg-green-100 text-green-600 shadow-green-100"
                   : "bg-red-100 text-red-600 shadow-red-100"
                 : "bg-amber-100 text-amber-600 shadow-amber-100"
             }`}>
-              {hasAnswerReveal ? (
+              {showRevealResult ? (
                 isCorrect ? <CheckCircle2 size={48} strokeWidth={3} /> : <XCircle size={48} strokeWidth={3} />
               ) : (
                 <Timer size={48} strokeWidth={3} />
@@ -281,23 +297,37 @@ export function StudentQuestion() {
 
             <h2
               className={`text-3xl font-black mb-2 ${
-                hasAnswerReveal
+                showRevealResult
                   ? isCorrect
                     ? "text-green-600"
                     : "text-red-600"
-                  : "text-amber-600"
+                  : timedOutWithoutAnswer
+                    ? "text-amber-600"
+                    : "text-indigo-600"
               }`}
             >
-              {hasAnswerReveal ? (isCorrect ? "Correct!" : "Nice Try!") : "Answer Submitted"}
+              {showRevealResult
+                ? (isCorrect ? "Correct!" : "Nice Try!")
+                : timedOutWithoutAnswer
+                  ? "Time's Up"
+                  : waitingForReveal
+                    ? "Answer Submitted"
+                    : "Time's Up"}
             </h2>
             <p className="text-gray-500 font-bold mb-8">
-              {hasAnswerReveal
+              {showRevealResult
                 ? isCorrect
                   ? "Your answer has been recorded."
                   : currentQuestion.correctAnswer !== undefined
                     ? "The correct answer was " + String.fromCharCode(65 + currentQuestion.correctAnswer)
                     : "Waiting for the host to reveal the correct answer..."
-                : "Wait for others to submit the answer. Wait for answer reveal."}
+                : waitingForReveal
+                  ? "Your answer has been submitted. Wait for others to submit and for the host to reveal the result."
+                  : timedOutWithoutAnswer
+                  ? selectedOption !== null
+                    ? "You selected an option, but it was recorded as unanswered because Confirm Answer was not clicked in time."
+                    : "No option was submitted before time ran out, so this question was recorded as unanswered."
+                  : "Wait for others to submit the answer. Wait for answer reveal."}
             </p>
 
             <div className="w-full bg-gray-50 p-6 rounded-3xl border border-gray-100 space-y-4">
@@ -324,7 +354,7 @@ export function StudentQuestion() {
             </div>
 
             <p className="mt-10 text-sm font-bold text-indigo-600 animate-pulse">
-              {hasAnswerReveal ? "Waiting for the next question..." : "Wait for answer reveal..."}
+              {showRevealResult ? "Waiting for the next question..." : "Wait for the next question..."}
             </p>
           </motion.div>
         )}

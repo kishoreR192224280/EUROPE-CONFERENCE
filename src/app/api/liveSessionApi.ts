@@ -13,8 +13,9 @@ type JoinSessionResponse =
       success: true;
       participant: {
         id: number;
+        studentId?: number;
         name: string;
-        registerNumber: string | null;
+        phoneNumber: string | null;
         token: string;
       };
       session: Session;
@@ -35,6 +36,7 @@ type SubmitAnswerResponse =
         isCorrect: boolean;
         scoreAwarded: number;
         responseTimeMs: number | null;
+        timedOut?: boolean;
       };
     }
   | ApiFailure;
@@ -46,7 +48,7 @@ async function readJson<T>(res: Response) {
 export async function joinLiveSession(payload: {
   code: string;
   name: string;
-  registerNumber: string;
+  phoneNumber: string;
 }) {
   const res = await fetch(BASE_URL + "join_session.php", {
     method: "POST",
@@ -118,7 +120,7 @@ export async function updateAdminSessionState(
 export async function submitParticipantAnswer(payload: {
   participantToken: string;
   questionId: string | number;
-  selectedOptionIndex: number;
+  selectedOptionIndex: number | null;
 }) {
   const res = await fetch(BASE_URL + "submit_answer.php", {
     method: "POST",

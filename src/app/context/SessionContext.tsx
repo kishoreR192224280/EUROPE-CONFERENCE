@@ -25,12 +25,23 @@ export interface Session {
   currentQuestionId?: string | number | null;
   currentQuestionIndex: number;
   currentQuestion?: Question | null;
+  currentQuestionResponse?: {
+    id: number;
+    selectedOptionIndex: number | null;
+    isCorrect: boolean;
+    responseTimeMs: number | null;
+    scoreAwarded: number;
+    answeredAt: string | null;
+    submitted: true;
+  } | null;
   questionStartedAt?: string | null;
+  timeRemainingSeconds?: number | null;
   participants: number;
   participantSummary?: {
     id: number;
+    studentId?: number;
     name: string;
-    registerNumber: string | null;
+    phoneNumber: string | null;
     score: number;
     rank: number;
     participantCount: number;
@@ -40,15 +51,17 @@ export interface Session {
   } | null;
   leaderboard?: Array<{
     id: number;
+    studentId?: number;
     name: string;
-    registerNumber: string | null;
+    phoneNumber: string | null;
     score: number;
     rank: number;
   }>;
   liveFeed?: Array<{
     id: number;
+    studentId?: number;
     name: string;
-    registerNumber: string | null;
+    phoneNumber: string | null;
     score: number;
     hasAnsweredCurrentQuestion: boolean;
     selectedOptionIndex: number | null;

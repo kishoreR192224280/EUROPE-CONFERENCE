@@ -1,10 +1,52 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { User, IdCard, Play, Users, ArrowLeft } from "lucide-react";
+import { User, IdCard, Play, Users, ArrowLeft, Phone } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import { useSession } from "../../context/SessionContext";
 import { getPublicSession, joinLiveSession, participantStorageKey } from "../../api/liveSessionApi";
+
+const COUNTRY_CODES = [
+  { label: "Australia", value: "+61" },
+  { label: "Bangladesh", value: "+880" },
+  { label: "Brazil", value: "+55" },
+  { label: "Canada", value: "+1" },
+  { label: "China", value: "+86" },
+  { label: "France", value: "+33" },
+  { label: "Germany", value: "+49" },
+  { label: "Hong Kong", value: "+852" },
+  { label: "India", value: "+91" },
+  { label: "Indonesia", value: "+62" },
+  { label: "Ireland", value: "+353" },
+  { label: "Italy", value: "+39" },
+  { label: "Japan", value: "+81" },
+  { label: "Malaysia", value: "+60" },
+  { label: "Mexico", value: "+52" },
+  { label: "Netherlands", value: "+31" },
+  { label: "New Zealand", value: "+64" },
+  { label: "Nigeria", value: "+234" },
+  { label: "Pakistan", value: "+92" },
+  { label: "Philippines", value: "+63" },
+  { label: "Saudi Arabia", value: "+966" },
+  { label: "Singapore", value: "+65" },
+  { label: "South Africa", value: "+27" },
+  { label: "South Korea", value: "+82" },
+  { label: "Spain", value: "+34" },
+  { label: "Sri Lanka", value: "+94" },
+  { label: "Thailand", value: "+66" },
+  { label: "UAE", value: "+971" },
+  { label: "United Kingdom", value: "+44" },
+  { label: "United States", value: "+1" },
+  { label: "Vietnam", value: "+84" },
+];
+
+function getResumeRoute(code: string, status?: string) {
+  if (status === "waiting" || status === "draft" || status === "scheduled") {
+    return `/join/${code}/waiting`;
+  }
+
+  return `/join/${code}/question`;
+}
 
 export function StudentJoin() {
   const navigate = useNavigate();
@@ -12,7 +54,8 @@ export function StudentJoin() {
   const { setSession } = useSession();
   const [formData, setFormData] = useState({
     name: "",
-    registerNumber: "",
+    countryCode: "+91",
+    phoneNumber: "",
     code: routeCode?.toUpperCase() ?? ""
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -37,18 +80,29 @@ export function StudentJoin() {
 
     const normalizedCode = routeCode.toUpperCase();
     const existingParticipant = sessionStorage.getItem(participantStorageKey(normalizedCode));
-    if (existingParticipant) {
-      navigate(`/join/${normalizedCode}/waiting`, { replace: true });
-      return;
-    }
-
     let isMounted = true;
     setIsCheckingSession(true);
 
     const loadSession = async () => {
       try {
-        const session = await getPublicSession(normalizedCode);
+        const participantToken = existingParticipant
+          ? (() => {
+              try {
+                return (JSON.parse(existingParticipant) as { token?: string }).token ?? "";
+              } catch {
+                return "";
+              }
+            })()
+          : "";
+
+        const session = await getPublicSession(normalizedCode, participantToken);
         if (!isMounted) {
+          return;
+        }
+
+        if (existingParticipant) {
+          setSession(session);
+          navigate(getResumeRoute(normalizedCode, session.status), { replace: true });
           return;
         }
 
@@ -80,6 +134,8 @@ export function StudentJoin() {
     e.preventDefault();
 
     const normalizedCode = formData.code.trim().toUpperCase();
+    const sanitizedPhoneDigits = formData.phoneNumber.replace(/\D/g, "");
+    const fullPhoneNumber = `${formData.countryCode}${sanitizedPhoneDigits}`;
     if (!normalizedCode) {
       toast.error("Please enter a session code");
       return;
@@ -90,8 +146,13 @@ export function StudentJoin() {
       return;
     }
 
-    if (!formData.registerNumber.trim()) {
-      toast.error("Please enter your register number");
+    if (!sanitizedPhoneDigits) {
+      toast.error("Please enter your phone number");
+      return;
+    }
+
+    if (sanitizedPhoneDigits.length < 7 || sanitizedPhoneDigits.length > 15) {
+      toast.error("Enter a valid phone number with country code");
       return;
     }
 
@@ -101,7 +162,7 @@ export function StudentJoin() {
       const response = await joinLiveSession({
         code: normalizedCode,
         name: formData.name.trim(),
-        registerNumber: formData.registerNumber.trim(),
+        phoneNumber: fullPhoneNumber,
       });
 
       sessionStorage.setItem(
@@ -197,17 +258,51 @@ export function StudentJoin() {
           </div>
 
           <div className="relative">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-              <IdCard size={20} />
+            <div className="absolute left-4 top-5 text-gray-400">
+              <Phone size={20} />
             </div>
-            <input
-              type="text"
-              placeholder="Register Number"
-              value={formData.registerNumber}
-              onChange={(e) => setFormData({ ...formData, registerNumber: e.target.value })}
-              className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-indigo-600 focus:bg-white outline-none transition-all font-bold"
-              required
-            />
+            <div className="overflow-hidden rounded-2xl border-2 border-gray-100 bg-gray-50 pl-12 transition-all focus-within:border-indigo-600 focus-within:bg-white">
+              <div className="grid grid-cols-1 md:grid-cols-[minmax(160px,200px)_1fr]">
+                <div className="border-b border-gray-100 md:border-b-0 md:border-r">
+                  <p className="px-4 pt-3 text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">
+                    Country Code
+                  </p>
+                  <select
+                    value={formData.countryCode}
+                    onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })}
+                    className="h-[46px] w-full bg-transparent px-4 pb-3 font-black text-gray-700 outline-none"
+                  >
+                    {COUNTRY_CODES.map((country) => (
+                      <option key={`${country.label}-${country.value}`} value={country.value}>
+                        {country.label} ({country.value})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <p className="px-4 pt-3 text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">
+                    Phone Number
+                  </p>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="98765 43210"
+                    value={formData.phoneNumber}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        phoneNumber: e.target.value.replace(/[^\d\s()-]/g, ""),
+                      })
+                    }
+                    className="h-[46px] w-full bg-transparent px-4 pb-3 font-bold outline-none"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+            <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
+              Saved as {formData.countryCode} {formData.phoneNumber.trim() || "your number"} for leaderboard and follow-up
+            </p>
           </div>
         </div>
 
@@ -235,7 +330,7 @@ export function StudentJoin() {
             </div>
             <div>
               <p className="text-sm font-bold text-gray-900">Live Check-in</p>
-              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Name + Register Number saved for leaderboard</p>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Name + Phone Number saved for leaderboard</p>
             </div>
           </div>
         </div>

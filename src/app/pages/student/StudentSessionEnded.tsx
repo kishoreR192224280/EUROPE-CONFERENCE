@@ -10,7 +10,7 @@ type ParticipantSummary = {
 type LeaderboardEntry = {
   id: number;
   name: string;
-  registerNumber?: string | null;
+  phoneNumber?: string | null;
   score: number;
   rank: number;
 };
@@ -19,7 +19,7 @@ type StudentSessionEndedProps = {
   code?: string;
   title: string;
   participantName?: string;
-  registerNumber?: string | null;
+  phoneNumber?: string | null;
   participantSummary?: ParticipantSummary;
   leaderboard?: LeaderboardEntry[];
 };
@@ -28,7 +28,7 @@ export function StudentSessionEnded({
   code,
   title,
   participantName,
-  registerNumber,
+  phoneNumber,
   participantSummary,
   leaderboard,
 }: StudentSessionEndedProps) {
@@ -90,8 +90,8 @@ export function StudentSessionEnded({
               <p className="mt-3 truncate text-lg font-black text-white">{participantName ?? "Guest Player"}</p>
             </div>
             <div className="rounded-[1.6rem] border border-white/10 bg-white/5 p-4 text-left backdrop-blur-xl">
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Register Number</p>
-              <p className="mt-3 text-lg font-black text-white">{registerNumber ?? "Not available"}</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Phone Number</p>
+              <p className="mt-3 text-lg font-black text-white">{phoneNumber ?? "Not available"}</p>
             </div>
             <div className="rounded-[1.6rem] border border-indigo-400/20 bg-indigo-500/10 p-4 text-left backdrop-blur-xl">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-indigo-300">Final Rank</p>
@@ -135,7 +135,7 @@ export function StudentSessionEnded({
                         #{entry.rank} {entry.name}
                       </p>
                       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                        {entry.registerNumber ?? "Participant"}
+                        {entry.phoneNumber ?? "Participant"}
                       </p>
                     </div>
                     <p className="shrink-0 text-xl font-black text-indigo-300">{entry.score}</p>
