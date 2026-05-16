@@ -1,5 +1,5 @@
 import { BASE_URL } from "./adminAuth";
-import type { Session } from "../context/SessionContext";
+import type { Question, Session } from "../context/SessionContext";
 
 type CreateSessionPayload = {
   title: string;
@@ -8,14 +8,7 @@ type CreateSessionPayload = {
   thumbnailUrl?: string;
   introVideoUrl?: string;
   status: "draft" | "waiting";
-  questions: Array<{
-    id: string | number;
-    text: string;
-    options: string[];
-    correctAnswer: number;
-    timer: number;
-    showLeaderboardAfter: boolean;
-  }>;
+  questions: Question[];
 };
 
 type CreateSessionResponse =

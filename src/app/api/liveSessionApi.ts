@@ -121,6 +121,10 @@ export async function submitParticipantAnswer(payload: {
   participantToken: string;
   questionId: string | number;
   selectedOptionIndex: number | null;
+  responseData?: {
+    items?: string[];
+    labels?: Record<string, string>;
+  } | null;
 }) {
   const res = await fetch(BASE_URL + "submit_answer.php", {
     method: "POST",

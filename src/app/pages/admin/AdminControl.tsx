@@ -285,6 +285,9 @@ export function AdminControl() {
                     <h3 className="text-2xl font-bold text-gray-900 leading-tight">
                       {currentQuestion.text}
                     </h3>
+                    {currentQuestion.instructions ? (
+                      <p className="mt-3 text-sm font-semibold text-gray-500">{currentQuestion.instructions}</p>
+                    ) : null}
                   </div>
                   <div className="ml-8">
                     <motion.div 
@@ -303,16 +306,56 @@ export function AdminControl() {
 
                 {isQuestionActive ? (
                   <div className="flex-1 flex flex-col">
-                    <div className="grid grid-cols-2 gap-4 mb-8">
-                      {currentQuestion.options.map((opt, i) => (
-                        <div key={i} className="p-5 rounded-2xl border-2 border-gray-50 bg-gray-50/50 flex items-center gap-4 transition-all hover:border-indigo-100">
-                          <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center font-black text-gray-400 shadow-sm">
-                            {String.fromCharCode(65 + i)}
+                    {currentQuestion.questionType === "sorting" ? (
+                      <div className="mb-8 space-y-3">
+                        {(currentQuestion.items ?? []).map((item, index) => (
+                          <div key={`${item}-${index}`} className="flex items-center gap-4 rounded-2xl border-2 border-gray-50 bg-gray-50/50 p-5">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 font-black text-white shadow-sm">
+                              {index + 1}
+                            </div>
+                            <span className="font-bold text-gray-700">{item}</span>
                           </div>
-                          <span className="font-bold text-gray-700">{opt}</span>
+                        ))}
+                      </div>
+                    ) : currentQuestion.questionType === "label_image" ? (
+                      <div className="mb-8 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+                        <div className="rounded-3xl border border-gray-100 bg-gray-50 p-4">
+                          <div className="relative mx-auto aspect-[4/3] max-w-xl overflow-hidden rounded-3xl bg-white">
+                            {currentQuestion.mediaUrl ? (
+                              <img src={currentQuestion.mediaUrl} alt="Question reference" className="h-full w-full object-cover" />
+                            ) : null}
+                            {(currentQuestion.labels ?? []).map((label) => (
+                              <div
+                                key={label.id}
+                                className="absolute flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-blue-600 text-sm font-black text-white shadow-lg"
+                                style={{ left: `${label.x}%`, top: `${label.y}%` }}
+                              >
+                                {label.marker}
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      ))}
-                    </div>
+                        <div className="space-y-3">
+                          {(currentQuestion.labels ?? []).map((label) => (
+                            <div key={label.id} className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
+                              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">Marker {label.marker}</p>
+                              <p className="mt-2 font-bold text-gray-800">{label.prompt}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mb-8 grid grid-cols-2 gap-4">
+                        {currentQuestion.options.map((opt, i) => (
+                          <div key={i} className="flex items-center gap-4 rounded-2xl border-2 border-gray-50 bg-gray-50/50 p-5 transition-all hover:border-indigo-100">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white font-black text-gray-400 shadow-sm">
+                              {String.fromCharCode(65 + i)}
+                            </div>
+                            <span className="font-bold text-gray-700">{opt}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     
                     <div className="mt-auto flex justify-center gap-4">
                       <button 
@@ -327,38 +370,82 @@ export function AdminControl() {
                   </div>
                 ) : (
                   <div className="flex-1 flex flex-col">
-                    <div className="h-64 mb-8">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={MOCK_STATS}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                          <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                          <YAxis hide />
-                          <Tooltip 
-                            cursor={{ fill: "transparent" }}
-                            content={({ active, payload }) => {
-                              if (active && payload && payload.length) {
-                                return (
-                                  <div className="bg-white p-3 rounded-xl shadow-xl border border-gray-100">
-                                    <p className="font-black text-gray-900">{payload[0].value} Players</p>
-                                    <p className="text-xs text-gray-500 font-bold uppercase">Option {payload[0].payload.name}</p>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            }}
-                          />
-                          <Bar dataKey="count" radius={[12, 12, 0, 0]}>
-                            {MOCK_STATS.map((entry, index) => (
-                              <Cell 
-                                key={`cell-${index}`} 
-                                fill={index === currentQuestion.correctAnswer ? "#10b981" : entry.color} 
-                                fillOpacity={index === currentQuestion.correctAnswer ? 1 : 0.4} 
-                              />
+                    {currentQuestion.questionType === "multiple_choice" ? (
+                      <div className="mb-8 h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={MOCK_STATS}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                            <YAxis hide />
+                            <Tooltip
+                              cursor={{ fill: "transparent" }}
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  return (
+                                    <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-xl">
+                                      <p className="font-black text-gray-900">{payload[0].value} Players</p>
+                                      <p className="text-xs font-bold uppercase text-gray-500">Option {payload[0].payload.name}</p>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Bar dataKey="count" radius={[12, 12, 0, 0]}>
+                              {MOCK_STATS.map((entry, index) => (
+                                <Cell
+                                  key={`cell-${index}`}
+                                  fill={index === currentQuestion.correctAnswer ? "#10b981" : entry.color}
+                                  fillOpacity={index === currentQuestion.correctAnswer ? 1 : 0.4}
+                                />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : currentQuestion.questionType === "sorting" ? (
+                      <div className="mb-8 rounded-3xl border border-emerald-100 bg-emerald-50 p-6">
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-600">Correct Order</p>
+                        <div className="mt-4 space-y-3">
+                          {(currentQuestion.correctOrder ?? currentQuestion.items ?? []).map((item, index) => (
+                            <div key={`${item}-${index}`} className="flex items-center gap-4 rounded-2xl bg-white px-4 py-3">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-sm font-black text-white">
+                                {index + 1}
+                              </div>
+                              <span className="font-bold text-gray-800">{item}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mb-8 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+                        <div className="rounded-3xl border border-gray-100 bg-gray-50 p-4">
+                          <div className="relative mx-auto aspect-[4/3] max-w-xl overflow-hidden rounded-3xl bg-white">
+                            {currentQuestion.mediaUrl ? (
+                              <img src={currentQuestion.mediaUrl} alt="Answer key" className="h-full w-full object-cover" />
+                            ) : null}
+                            {(currentQuestion.labels ?? []).map((label) => (
+                              <div
+                                key={label.id}
+                                className="absolute flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-emerald-600 text-sm font-black text-white shadow-lg"
+                                style={{ left: `${label.x}%`, top: `${label.y}%` }}
+                              >
+                                {label.marker}
+                              </div>
                             ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          {(currentQuestion.labels ?? []).map((label) => (
+                            <div key={label.id} className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                              <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-600">Marker {label.marker}</p>
+                              <p className="mt-2 text-lg font-black text-gray-900">{label.acceptedAnswers?.[0] ?? label.prompt}</p>
+                              <p className="mt-1 text-sm font-semibold text-gray-500">{label.prompt}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     
                     <div className="mt-auto flex justify-center gap-4">
                       <button 
@@ -367,7 +454,7 @@ export function AdminControl() {
                         className="px-10 py-4 bg-indigo-600 text-white font-black text-lg rounded-2xl hover:bg-indigo-700 transition-all flex items-center gap-3 shadow-xl shadow-indigo-100 active:scale-95 disabled:opacity-60"
                       >
                         {currentSession.currentQuestionIndex + 1 === currentSession.questions.length
-                          ? "Finish Quiz"
+                          ? "End session"
                           : shouldOfferLeaderboard
                             ? "Show Leaderboard"
                             : "Next Question"}

@@ -13,6 +13,7 @@ export function BigScreen() {
   const [view, setView] = useState<"lobby" | "question" | "results" | "leaderboard" | "ended">("lobby");
   const [timeLeft, setTimeLeft] = useState(30);
   const leaderboard = currentSession?.leaderboard ?? [];
+  const currentQuestion = currentSession?.currentQuestion;
 
   const getInitials = (name: string) =>
     name
@@ -158,7 +159,7 @@ export function BigScreen() {
             </motion.div>
           )}
 
-          {view === "question" && currentSession?.currentQuestion && (
+          {view === "question" && currentQuestion && (
             <motion.div
               key="question"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -173,32 +174,84 @@ export function BigScreen() {
                   <span className="text-[10px] uppercase tracking-widest leading-none mt-1">Sec</span>
                 </div>
                 <h2 className="text-6xl font-black text-center pt-10 leading-tight tracking-tight">
-                  {currentSession.currentQuestion.text}
+                  {currentQuestion.text}
                 </h2>
+                {currentQuestion.instructions ? (
+                  <p className="mt-6 text-center text-xl font-semibold text-slate-300">
+                    {currentQuestion.instructions}
+                  </p>
+                ) : null}
               </div>
 
-              <div className="grid grid-cols-2 gap-10">
-                {currentSession.currentQuestion.options.map((opt, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 + (i * 0.1) }}
-                    className="flex items-center gap-10 p-10 rounded-[3rem] border-2 border-white/5 bg-white/5 backdrop-blur-xl relative overflow-hidden"
-                  >
-                    <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-4xl font-black shadow-xl ${
-                      i === 0 ? "bg-amber-500" : i === 1 ? "bg-blue-500" : i === 2 ? "bg-emerald-500" : "bg-purple-500"
-                    }`}>
-                      {String.fromCharCode(65 + i)}
+              {currentQuestion.questionType === "sorting" ? (
+                <div className="space-y-6">
+                  {(currentQuestion.items ?? []).map((item, i) => (
+                    <motion.div
+                      key={`${item}-${i}`}
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.15 + i * 0.08 }}
+                      className="flex items-center gap-8 rounded-[3rem] border-2 border-white/5 bg-white/5 p-8 backdrop-blur-xl"
+                    >
+                      <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-emerald-500 text-4xl font-black shadow-xl">
+                        {i + 1}
+                      </div>
+                      <span className="text-4xl font-bold tracking-tight text-gray-100">{item}</span>
+                    </motion.div>
+                  ))}
+                </div>
+              ) : currentQuestion.questionType === "label_image" ? (
+                <div className="grid items-start gap-10 lg:grid-cols-[1.15fr_0.85fr]">
+                  <div className="rounded-[3rem] border border-white/10 bg-white/5 p-8 backdrop-blur-xl">
+                    <div className="relative mx-auto aspect-[4/3] max-w-3xl overflow-hidden rounded-[2rem] bg-white">
+                      {currentQuestion.mediaUrl ? (
+                        <img src={currentQuestion.mediaUrl} alt="Question reference" className="h-full w-full object-cover" />
+                      ) : null}
+                      {(currentQuestion.labels ?? []).map((label) => (
+                        <div
+                          key={label.id}
+                          className="absolute flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-[#0f172a] bg-blue-500 text-2xl font-black text-white shadow-2xl"
+                          style={{ left: `${label.x}%`, top: `${label.y}%` }}
+                        >
+                          {label.marker}
+                        </div>
+                      ))}
                     </div>
-                    <span className="text-4xl font-bold tracking-tight text-gray-100">{opt}</span>
-                  </motion.div>
-                ))}
-              </div>
+                  </div>
+
+                  <div className="space-y-5">
+                    {(currentQuestion.labels ?? []).map((label) => (
+                      <div key={label.id} className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+                        <p className="text-sm font-black uppercase tracking-[0.22em] text-blue-300">Marker {label.marker}</p>
+                        <p className="mt-3 text-3xl font-bold tracking-tight text-white">{label.prompt}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-10">
+                  {currentQuestion.options.map((opt, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 + i * 0.1 }}
+                      className="relative flex items-center gap-10 overflow-hidden rounded-[3rem] border-2 border-white/5 bg-white/5 p-10 backdrop-blur-xl"
+                    >
+                      <div className={`flex h-20 w-20 items-center justify-center rounded-2xl text-4xl font-black shadow-xl ${
+                        i === 0 ? "bg-amber-500" : i === 1 ? "bg-blue-500" : i === 2 ? "bg-emerald-500" : "bg-purple-500"
+                      }`}>
+                        {String.fromCharCode(65 + i)}
+                      </div>
+                      <span className="text-4xl font-bold tracking-tight text-gray-100">{opt}</span>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </motion.div>
           )}
 
-          {view === "results" && currentSession?.currentQuestion && (
+          {view === "results" && currentQuestion && (
             <motion.div
               key="results"
               initial={{ opacity: 0, scale: 0.9 }}
@@ -210,47 +263,92 @@ export function BigScreen() {
                 <p className="text-2xl text-indigo-400 font-bold uppercase tracking-widest">How did everyone do?</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-10">
-                {currentSession.currentQuestion.options.map((opt, i) => {
-                  const isCorrect = i === currentSession.currentQuestion?.correctAnswer;
-                  return (
+              {currentQuestion.questionType === "sorting" ? (
+                <div className="space-y-6">
+                  {(currentQuestion.correctOrder ?? currentQuestion.items ?? []).map((item, i) => (
                     <motion.div
-                      key={i}
-                      initial={{ opacity: 0 }}
-                      animate={{ 
-                        opacity: 1,
-                        scale: isCorrect ? 1.05 : 0.95,
-                        borderColor: isCorrect ? "rgba(16, 185, 129, 0.5)" : "rgba(255, 255, 255, 0.05)"
-                      }}
-                      className={`flex items-center justify-between p-10 rounded-[3rem] border-4 transition-all ${
-                        isCorrect 
-                          ? "bg-emerald-500/20 shadow-[0_0_80px_rgba(16,185,129,0.2)]" 
-                          : "bg-white/5 opacity-50"
-                      }`}
+                      key={`${item}-${i}`}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.08 }}
+                      className="flex items-center gap-8 rounded-[3rem] border-2 border-emerald-400/30 bg-emerald-500/10 p-8"
                     >
-                      <div className="flex items-center gap-10">
-                        <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-4xl font-black ${
-                          isCorrect ? "bg-emerald-500 text-white" : "bg-gray-700 text-gray-400"
-                        }`}>
-                          {String.fromCharCode(65 + i)}
-                        </div>
-                        <span className="text-4xl font-bold tracking-tight">{opt}</span>
+                      <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-emerald-500 text-4xl font-black text-white">
+                        {i + 1}
                       </div>
-                      {isCorrect && (
-                        <motion.div 
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          className="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg"
-                        >
-                          <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </motion.div>
-                      )}
+                      <span className="text-4xl font-bold tracking-tight text-white">{item}</span>
                     </motion.div>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              ) : currentQuestion.questionType === "label_image" ? (
+                <div className="grid items-start gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+                  <div className="rounded-[3rem] border border-white/10 bg-white/5 p-8">
+                    <div className="relative mx-auto aspect-[4/3] max-w-3xl overflow-hidden rounded-[2rem] bg-white">
+                      {currentQuestion.mediaUrl ? (
+                        <img src={currentQuestion.mediaUrl} alt="Diagram answer key" className="h-full w-full object-cover" />
+                      ) : null}
+                      {(currentQuestion.labels ?? []).map((label) => (
+                        <div
+                          key={label.id}
+                          className="absolute flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-[#0f172a] bg-emerald-500 text-2xl font-black text-white shadow-2xl"
+                          style={{ left: `${label.x}%`, top: `${label.y}%` }}
+                        >
+                          {label.marker}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-5">
+                    {(currentQuestion.labels ?? []).map((label) => (
+                      <div key={label.id} className="rounded-[2rem] border border-emerald-400/20 bg-emerald-500/10 p-6">
+                        <p className="text-sm font-black uppercase tracking-[0.22em] text-emerald-300">Marker {label.marker}</p>
+                        <p className="mt-2 text-3xl font-black text-white">{label.acceptedAnswers?.[0] ?? label.prompt}</p>
+                        <p className="mt-2 text-sm font-semibold text-slate-300">{label.prompt}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-10">
+                  {currentQuestion.options.map((opt, i) => {
+                    const isCorrect = i === currentQuestion.correctAnswer;
+                    return (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0 }}
+                        animate={{
+                          opacity: 1,
+                          scale: isCorrect ? 1.05 : 0.95,
+                          borderColor: isCorrect ? "rgba(16, 185, 129, 0.5)" : "rgba(255, 255, 255, 0.05)",
+                        }}
+                        className={`flex items-center justify-between rounded-[3rem] border-4 p-10 transition-all ${
+                          isCorrect ? "bg-emerald-500/20 shadow-[0_0_80px_rgba(16,185,129,0.2)]" : "bg-white/5 opacity-50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-10">
+                          <div className={`flex h-20 w-20 items-center justify-center rounded-2xl text-4xl font-black ${
+                            isCorrect ? "bg-emerald-500 text-white" : "bg-gray-700 text-gray-400"
+                          }`}>
+                            {String.fromCharCode(65 + i)}
+                          </div>
+                          <span className="text-4xl font-bold tracking-tight">{opt}</span>
+                        </div>
+                        {isCorrect ? (
+                          <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 shadow-lg"
+                          >
+                            <svg className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </motion.div>
+                        ) : null}
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -361,9 +459,6 @@ export function BigScreen() {
           <div className="px-8 py-4 bg-indigo-600/10 rounded-2xl border border-indigo-600/20 text-xs font-black uppercase tracking-[0.2em] text-indigo-400">
             FASTEST ANSWER WINS
           </div>
-        </div>
-        <div className="text-gray-600 font-black uppercase tracking-[0.4em] text-[10px]">
-          POWERED BY QUIZPRO INTERACTIVE ENGINE
         </div>
       </footer>
     </div>

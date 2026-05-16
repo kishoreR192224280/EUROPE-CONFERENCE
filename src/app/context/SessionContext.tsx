@@ -2,11 +2,28 @@ import { createContext, useContext, useState, ReactNode } from "react";
 
 export const ACTIVE_ADMIN_SESSION_ID_STORAGE_KEY = "activeAdminSessionId";
 
+export type QuestionType = "multiple_choice" | "sorting" | "label_image";
+
+export type LabelImageZone = {
+  id: string;
+  marker: number;
+  x: number;
+  y: number;
+  prompt: string;
+  acceptedAnswers?: string[];
+};
+
 export interface Question {
   id: string | number;
+  questionType: QuestionType;
   text: string;
+  instructions?: string;
+  mediaUrl?: string;
   options: string[];
   correctAnswer?: number;
+  items?: string[];
+  correctOrder?: string[];
+  labels?: LabelImageZone[];
   timer: number;
   showLeaderboardAfter: boolean;
 }
@@ -28,6 +45,10 @@ export interface Session {
   currentQuestionResponse?: {
     id: number;
     selectedOptionIndex: number | null;
+    responseData?: {
+      items?: string[];
+      labels?: Record<string, string>;
+    } | null;
     isCorrect: boolean;
     responseTimeMs: number | null;
     scoreAwarded: number;
