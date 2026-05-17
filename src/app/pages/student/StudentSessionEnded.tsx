@@ -5,6 +5,10 @@ type ParticipantSummary = {
   rank: number;
   score: number;
   correctAnswers: number;
+  fullyCorrectAnswers?: number;
+  partiallyCorrectAnswers?: number;
+  correctParts?: number;
+  totalParts?: number;
 } | null | undefined;
 
 type LeaderboardEntry = {
@@ -32,6 +36,11 @@ export function StudentSessionEnded({
   participantSummary,
   leaderboard,
 }: StudentSessionEndedProps) {
+  const fullyCorrectAnswers = participantSummary?.fullyCorrectAnswers ?? participantSummary?.correctAnswers ?? 0;
+  const partiallyCorrectAnswers = participantSummary?.partiallyCorrectAnswers ?? 0;
+  const correctParts = participantSummary?.correctParts ?? fullyCorrectAnswers;
+  const totalParts = participantSummary?.totalParts ?? participantSummary?.correctAnswers ?? 0;
+
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden bg-[#0f172a] p-4 text-white sm:p-6">
       <div className="absolute inset-0 overflow-hidden">
@@ -107,8 +116,14 @@ export function StudentSessionEnded({
 
           <div className="mt-3 grid gap-3 sm:grid-cols-[0.9fr_1.1fr]">
             <div className="rounded-[1.6rem] border border-amber-400/20 bg-amber-500/10 p-4 text-left backdrop-blur-xl">
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-300">Correct Answers</p>
-              <p className="mt-3 text-2xl font-black text-white">{participantSummary?.correctAnswers ?? 0}</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-300">Answer Accuracy</p>
+              <p className="mt-3 text-2xl font-black text-white">
+                {totalParts > 0 ? `${correctParts}/${totalParts}` : `${fullyCorrectAnswers}`}
+              </p>
+              <p className="mt-2 text-xs font-semibold leading-6 text-amber-100/90">
+                {fullyCorrectAnswers} fully correct
+                {partiallyCorrectAnswers > 0 ? `, ${partiallyCorrectAnswers} partial credit` : ""}
+              </p>
             </div>
             <div className="rounded-[1.6rem] border border-white/10 bg-white/5 p-4 text-left backdrop-blur-xl">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Next Step</p>

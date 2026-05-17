@@ -7,12 +7,16 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { toast } from "sonner";
 import { getAdminSession, updateAdminSessionState } from "../../api/liveSessionApi";
 
-const MOCK_STATS = [
-  { name: "A", count: 12, color: "#3b82f6" },
-  { name: "B", count: 28, color: "#10b981" },
-  { name: "C", count: 8, color: "#f59e0b" },
-  { name: "D", count: 4, color: "#ef4444" },
-];
+const MCQ_BAR_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
+
+function shuffleMatchingPairs<T>(items: T[]) {
+  const next = [...items];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+  }
+  return next;
+}
 
 export function AdminControl() {
   const { id } = useParams();
@@ -20,6 +24,13 @@ export function AdminControl() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isBusy, setIsBusy] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [shuffledMatchingPairs, setShuffledMatchingPairs] = useState<Array<{
+    id: string;
+    leftText: string;
+    leftImageUrl?: string;
+    rightText: string;
+    rightImageUrl?: string;
+  }>>([]);
   const normalizedSessionId = id && /^\d+$/.test(id) ? id : null;
 
   useEffect(() => {
@@ -58,12 +69,26 @@ export function AdminControl() {
   const currentQuestion = currentSession
     ? currentSession.currentQuestion ?? currentSession.questions[currentSession.currentQuestionIndex]
     : null;
+  const matchingPairs =
+    currentQuestion?.matchingPairs ??
+    (currentSession && currentSession.currentQuestionIndex >= 0
+      ? currentSession.questions[currentSession.currentQuestionIndex]?.matchingPairs ?? []
+      : []);
   const isQuestionActive = currentSession?.status === "active";
   const isSessionEnded = currentSession?.status === "ended";
   const shouldOfferLeaderboard =
     !!currentQuestion &&
     currentSession?.status !== "leaderboard" &&
     currentQuestion.showLeaderboardAfter;
+  const mcqStats =
+    currentSession?.currentQuestionStats?.optionCounts ??
+    currentQuestion?.options.map((optionText, index) => ({
+      name: String.fromCharCode(65 + index),
+      optionText,
+      count: 0,
+      isCorrect: currentQuestion.correctAnswer === index,
+    })) ??
+    [];
 
   const formatLastActivity = (value: string | null) => {
     if (!value) {
@@ -104,6 +129,15 @@ export function AdminControl() {
 
     return () => window.clearInterval(timer);
   }, [currentQuestion, currentSession?.timeRemainingSeconds, isQuestionActive]);
+
+  useEffect(() => {
+    if (!currentQuestion || currentQuestion.questionType !== "matching") {
+      setShuffledMatchingPairs([]);
+      return;
+    }
+
+    setShuffledMatchingPairs(shuffleMatchingPairs(matchingPairs));
+  }, [currentQuestion?.id]);
 
   if (!normalizedSessionId) {
     return (
@@ -317,6 +351,54 @@ export function AdminControl() {
                           </div>
                         ))}
                       </div>
+                    ) : currentQuestion.questionType === "matching" ? (
+                      <div className="mb-8 grid gap-5 lg:grid-cols-2">
+                        <div className="rounded-3xl border border-gray-100 bg-gray-50 p-5">
+                          <p className="mb-4 text-xs font-black uppercase tracking-[0.18em] text-blue-600">Left Options</p>
+                          <div className="space-y-3">
+                            {matchingPairs.map((pair, index) => (
+                              <div key={pair.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                                <div className="flex items-start gap-3">
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">
+                                    {index + 1}
+                                  </div>
+                                  <div className="min-w-0 flex-1 space-y-3">
+                                    {pair.leftImageUrl ? (
+                                      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-gray-50">
+                                        <img src={pair.leftImageUrl} alt={pair.leftText} className="h-24 w-full object-contain" />
+                                      </div>
+                                    ) : null}
+                                    <p className="font-bold text-gray-800">{pair.leftText}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="rounded-3xl border border-gray-100 bg-gray-50 p-5">
+                          <p className="mb-4 text-xs font-black uppercase tracking-[0.18em] text-violet-600">Match Bank</p>
+                          <div className="space-y-3">
+                            {shuffledMatchingPairs.map((pair, index) => (
+                              <div key={pair.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                                <div className="flex items-start gap-3">
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm font-black text-white">
+                                    {String.fromCharCode(65 + index)}
+                                  </div>
+                                  <div className="min-w-0 flex-1 space-y-3">
+                                    {pair.rightImageUrl ? (
+                                      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-gray-50">
+                                        <img src={pair.rightImageUrl} alt={pair.rightText} className="h-24 w-full object-contain" />
+                                      </div>
+                                    ) : null}
+                                    <p className="font-bold text-gray-800">{pair.rightText}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     ) : currentQuestion.questionType === "label_image" ? (
                       <div className="mb-8 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
                         <div className="rounded-3xl border border-gray-100 bg-gray-50 p-4">
@@ -373,7 +455,7 @@ export function AdminControl() {
                     {currentQuestion.questionType === "multiple_choice" ? (
                       <div className="mb-8 h-64">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={MOCK_STATS}>
+                          <BarChart data={mcqStats}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                             <XAxis dataKey="name" axisLine={false} tickLine={false} />
                             <YAxis hide />
@@ -385,6 +467,7 @@ export function AdminControl() {
                                     <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-xl">
                                       <p className="font-black text-gray-900">{payload[0].value} Players</p>
                                       <p className="text-xs font-bold uppercase text-gray-500">Option {payload[0].payload.name}</p>
+                                      <p className="mt-1 text-sm font-semibold text-gray-700">{payload[0].payload.optionText}</p>
                                     </div>
                                   );
                                 }
@@ -392,11 +475,11 @@ export function AdminControl() {
                               }}
                             />
                             <Bar dataKey="count" radius={[12, 12, 0, 0]}>
-                              {MOCK_STATS.map((entry, index) => (
+                              {mcqStats.map((entry, index) => (
                                 <Cell
                                   key={`cell-${index}`}
-                                  fill={index === currentQuestion.correctAnswer ? "#10b981" : entry.color}
-                                  fillOpacity={index === currentQuestion.correctAnswer ? 1 : 0.4}
+                                  fill={entry.isCorrect ? "#10b981" : MCQ_BAR_COLORS[index % MCQ_BAR_COLORS.length]}
+                                  fillOpacity={entry.isCorrect ? 1 : 0.4}
                                 />
                               ))}
                             </Bar>
@@ -416,6 +499,46 @@ export function AdminControl() {
                             </div>
                           ))}
                         </div>
+                      </div>
+                    ) : currentQuestion.questionType === "matching" ? (
+                      <div className="mb-8 space-y-4">
+                        {matchingPairs.map((pair, index) => (
+                          <div key={pair.id} className="rounded-3xl border border-emerald-100 bg-emerald-50 p-5">
+                            <div className="grid gap-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">
+                                    {index + 1}
+                                  </div>
+                                  <p className="font-black text-gray-900">{pair.leftText}</p>
+                                </div>
+                                {pair.leftImageUrl ? (
+                                  <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-white">
+                                    <img src={pair.leftImageUrl} alt={pair.leftText} className="h-28 w-full object-contain" />
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              <div className="mx-auto rounded-full bg-emerald-600 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-white">
+                                Correct Match
+                              </div>
+
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-sm font-black text-white">
+                                    {String.fromCharCode(65 + index)}
+                                  </div>
+                                  <p className="font-black text-gray-900">{pair.rightText}</p>
+                                </div>
+                                {pair.rightImageUrl ? (
+                                  <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-white">
+                                    <img src={pair.rightImageUrl} alt={pair.rightText} className="h-28 w-full object-contain" />
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     ) : (
                       <div className="mb-8 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">

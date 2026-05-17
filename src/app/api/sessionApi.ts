@@ -11,6 +11,18 @@ type CreateSessionPayload = {
   questions: Question[];
 };
 
+type UploadLabelImageResponse =
+  | {
+      success: true;
+      message: string;
+      url: string;
+      path: string;
+    }
+  | {
+      success: false;
+      error: string;
+    };
+
 type CreateSessionResponse =
   | {
       success: true;
@@ -37,4 +49,23 @@ export async function createSession(payload: CreateSessionPayload) {
   }
 
   return data.session;
+}
+
+export async function uploadLabelImage(file: File) {
+  const formData = new FormData();
+  formData.append("image", file);
+
+  const res = await fetch(BASE_URL + "upload_label_image.php", {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+
+  const data = (await res.json()) as UploadLabelImageResponse;
+
+  if (!res.ok || !data.success) {
+    throw new Error(data.success ? "Failed to upload image" : data.error);
+  }
+
+  return data;
 }

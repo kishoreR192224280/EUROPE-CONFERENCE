@@ -7,11 +7,31 @@ import confetti from "canvas-confetti";
 import { useSession } from "../context/SessionContext";
 import { getPublicSession } from "../api/liveSessionApi";
 
+function getPrimaryLabelAnswer(label: { acceptedAnswers?: string[]; prompt: string; marker: number }) {
+  return label.acceptedAnswers?.find((answer) => answer.trim())?.trim() || label.prompt || `Item ${label.marker}`;
+}
+
+function shuffleMatchingPairs<T>(items: T[]) {
+  const next = [...items];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+  }
+  return next;
+}
+
 export function BigScreen() {
   const { code } = useParams();
   const { currentSession, setSession } = useSession();
   const [view, setView] = useState<"lobby" | "question" | "results" | "leaderboard" | "ended">("lobby");
   const [timeLeft, setTimeLeft] = useState(30);
+  const [shuffledMatchingPairs, setShuffledMatchingPairs] = useState<Array<{
+    id: string;
+    leftText: string;
+    leftImageUrl?: string;
+    rightText: string;
+    rightImageUrl?: string;
+  }>>([]);
   const leaderboard = currentSession?.leaderboard ?? [];
   const currentQuestion = currentSession?.currentQuestion;
 
@@ -22,6 +42,22 @@ export function BigScreen() {
       .join("")
       .slice(0, 2)
       .toUpperCase();
+
+  const labelItems = [...(currentQuestion?.labels ?? [])].sort((a, b) => a.marker - b.marker);
+  const matchingPairs =
+    currentQuestion?.matchingPairs ??
+    (currentSession && currentSession.currentQuestionIndex >= 0
+      ? currentSession.questions[currentSession.currentQuestionIndex]?.matchingPairs ?? []
+      : []);
+
+  useEffect(() => {
+    if (!currentQuestion || currentQuestion.questionType !== "matching") {
+      setShuffledMatchingPairs([]);
+      return;
+    }
+
+    setShuffledMatchingPairs(shuffleMatchingPairs(matchingPairs));
+  }, [currentQuestion?.id]);
 
   useEffect(() => {
     if (!code) {
@@ -203,11 +239,15 @@ export function BigScreen() {
               ) : currentQuestion.questionType === "label_image" ? (
                 <div className="grid items-start gap-10 lg:grid-cols-[1.15fr_0.85fr]">
                   <div className="rounded-[3rem] border border-white/10 bg-white/5 p-8 backdrop-blur-xl">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <p className="text-sm font-black uppercase tracking-[0.22em] text-blue-300">Image Reference</p>
+                      <p className="text-sm font-semibold text-slate-400">{labelItems.length} markers to label</p>
+                    </div>
                     <div className="relative mx-auto aspect-[4/3] max-w-3xl overflow-hidden rounded-[2rem] bg-white">
                       {currentQuestion.mediaUrl ? (
-                        <img src={currentQuestion.mediaUrl} alt="Question reference" className="h-full w-full object-cover" />
+                        <img src={currentQuestion.mediaUrl} alt="Question reference" className="h-full w-full object-contain" />
                       ) : null}
-                      {(currentQuestion.labels ?? []).map((label) => (
+                      {labelItems.map((label) => (
                         <div
                           key={label.id}
                           className="absolute flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-[#0f172a] bg-blue-500 text-2xl font-black text-white shadow-2xl"
@@ -220,12 +260,67 @@ export function BigScreen() {
                   </div>
 
                   <div className="space-y-5">
-                    {(currentQuestion.labels ?? []).map((label) => (
+                    {labelItems.map((label) => (
                       <div key={label.id} className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-                        <p className="text-sm font-black uppercase tracking-[0.22em] text-blue-300">Marker {label.marker}</p>
-                        <p className="mt-3 text-3xl font-bold tracking-tight text-white">{label.prompt}</p>
+                        <div className="flex items-center gap-4">
+                          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-2xl font-black text-white shadow-xl">
+                            {label.marker}
+                          </div>
+                          <div>
+                            <p className="text-sm font-black uppercase tracking-[0.22em] text-blue-300">Item {label.marker}</p>
+                            <p className="mt-1 text-2xl font-bold tracking-tight text-white">Add the correct label here</p>
+                          </div>
+                        </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              ) : currentQuestion.questionType === "matching" ? (
+                <div className="grid gap-8 lg:grid-cols-2">
+                  <div className="rounded-[3rem] border border-white/10 bg-white/5 p-8 backdrop-blur-xl">
+                    <p className="mb-6 text-sm font-black uppercase tracking-[0.22em] text-blue-300">Options</p>
+                    <div className="space-y-4">
+                      {matchingPairs.map((pair, index) => (
+                        <div key={pair.id} className="rounded-[2rem] border border-white/10 bg-white/5 p-5">
+                          <div className="flex items-start gap-4">
+                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-600 text-2xl font-black text-white shadow-xl">
+                              {index + 1}
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-3">
+                              {pair.leftImageUrl ? (
+                                <div className="overflow-hidden rounded-2xl bg-white/95">
+                                  <img src={pair.leftImageUrl} alt={pair.leftText} className="h-36 w-full object-contain" />
+                                </div>
+                              ) : null}
+                              <p className="text-3xl font-black tracking-tight text-white">{pair.leftText}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[3rem] border border-white/10 bg-white/5 p-8 backdrop-blur-xl">
+                    <p className="mb-6 text-sm font-black uppercase tracking-[0.22em] text-violet-300">Match Bank</p>
+                    <div className="space-y-4">
+                      {shuffledMatchingPairs.map((pair, index) => (
+                        <div key={pair.id} className="rounded-[2rem] border border-white/10 bg-white/5 p-5">
+                          <div className="flex items-start gap-4">
+                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-violet-600 text-2xl font-black text-white shadow-xl">
+                              {String.fromCharCode(65 + index)}
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-3">
+                              {pair.rightImageUrl ? (
+                                <div className="overflow-hidden rounded-2xl bg-white/95">
+                                  <img src={pair.rightImageUrl} alt={pair.rightText} className="h-36 w-full object-contain" />
+                                </div>
+                              ) : null}
+                              <p className="text-3xl font-black tracking-tight text-white">{pair.rightText}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -283,11 +378,15 @@ export function BigScreen() {
               ) : currentQuestion.questionType === "label_image" ? (
                 <div className="grid items-start gap-10 lg:grid-cols-[1.1fr_0.9fr]">
                   <div className="rounded-[3rem] border border-white/10 bg-white/5 p-8">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <p className="text-sm font-black uppercase tracking-[0.22em] text-emerald-300">Answer Key</p>
+                      <p className="text-sm font-semibold text-slate-400">{labelItems.length} labeled markers</p>
+                    </div>
                     <div className="relative mx-auto aspect-[4/3] max-w-3xl overflow-hidden rounded-[2rem] bg-white">
                       {currentQuestion.mediaUrl ? (
-                        <img src={currentQuestion.mediaUrl} alt="Diagram answer key" className="h-full w-full object-cover" />
+                        <img src={currentQuestion.mediaUrl} alt="Diagram answer key" className="h-full w-full object-contain" />
                       ) : null}
-                      {(currentQuestion.labels ?? []).map((label) => (
+                      {labelItems.map((label) => (
                         <div
                           key={label.id}
                           className="absolute flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-[#0f172a] bg-emerald-500 text-2xl font-black text-white shadow-2xl"
@@ -299,14 +398,71 @@ export function BigScreen() {
                     </div>
                   </div>
                   <div className="space-y-5">
-                    {(currentQuestion.labels ?? []).map((label) => (
+                    {labelItems.map((label) => (
                       <div key={label.id} className="rounded-[2rem] border border-emerald-400/20 bg-emerald-500/10 p-6">
-                        <p className="text-sm font-black uppercase tracking-[0.22em] text-emerald-300">Marker {label.marker}</p>
-                        <p className="mt-2 text-3xl font-black text-white">{label.acceptedAnswers?.[0] ?? label.prompt}</p>
-                        <p className="mt-2 text-sm font-semibold text-slate-300">{label.prompt}</p>
+                        <div className="flex items-start gap-4">
+                          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-2xl font-black text-white shadow-xl">
+                            {label.marker}
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-sm font-black uppercase tracking-[0.22em] text-emerald-300">Item {label.marker}</p>
+                            <p className="text-3xl font-black text-white">{getPrimaryLabelAnswer(label)}</p>
+                            {label.acceptedAnswers && label.acceptedAnswers.length > 1 ? (
+                              <p className="text-sm font-semibold text-slate-300">
+                                Also accepted: {label.acceptedAnswers.slice(1).join(", ")}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
+                </div>
+              ) : currentQuestion.questionType === "matching" ? (
+                <div className="space-y-6">
+                  {matchingPairs.map((pair, index) => (
+                    <motion.div
+                      key={pair.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.08 }}
+                      className="rounded-[3rem] border border-emerald-400/20 bg-emerald-500/10 p-6"
+                    >
+                      <div className="grid gap-6 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-4">
+                            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-2xl font-black text-white shadow-xl">
+                              {index + 1}
+                            </div>
+                            <p className="text-3xl font-black tracking-tight text-white">{pair.leftText}</p>
+                          </div>
+                          {pair.leftImageUrl ? (
+                            <div className="overflow-hidden rounded-2xl bg-white/95">
+                              <img src={pair.leftImageUrl} alt={pair.leftText} className="h-36 w-full object-contain" />
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="mx-auto rounded-full bg-emerald-500 px-4 py-2 text-sm font-black uppercase tracking-[0.18em] text-[#0f172a]">
+                          Correct Match
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-4">
+                            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-violet-600 text-2xl font-black text-white shadow-xl">
+                              {String.fromCharCode(65 + index)}
+                            </div>
+                            <p className="text-3xl font-black tracking-tight text-white">{pair.rightText}</p>
+                          </div>
+                          {pair.rightImageUrl ? (
+                            <div className="overflow-hidden rounded-2xl bg-white/95">
+                              <img src={pair.rightImageUrl} alt={pair.rightText} className="h-36 w-full object-contain" />
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-10">

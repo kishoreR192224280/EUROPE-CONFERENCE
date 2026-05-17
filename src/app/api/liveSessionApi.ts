@@ -37,6 +37,29 @@ type SubmitAnswerResponse =
         scoreAwarded: number;
         responseTimeMs: number | null;
         timedOut?: boolean;
+        correctParts?: number;
+        totalParts?: number;
+        labelResults?: Record<
+          string,
+          {
+            submitted: string;
+            isCorrect: boolean;
+            acceptedAnswers: string[];
+          }
+        >;
+        matchingResults?: Record<
+          string,
+          {
+            selectedPairId: string | null;
+            selectedRightText: string;
+            correctRightText: string;
+            selectedRightLabel?: string;
+            correctRightLabel?: string;
+            selectedRightImageUrl?: string | null;
+            correctRightImageUrl?: string | null;
+            isCorrect: boolean;
+          }
+        >;
       };
     }
   | ApiFailure;
@@ -121,10 +144,11 @@ export async function submitParticipantAnswer(payload: {
   participantToken: string;
   questionId: string | number;
   selectedOptionIndex: number | null;
-  responseData?: {
-    items?: string[];
-    labels?: Record<string, string>;
-  } | null;
+    responseData?: {
+      items?: string[];
+      labels?: Record<string, string>;
+      matches?: Record<string, string>;
+    } | null;
 }) {
   const res = await fetch(BASE_URL + "submit_answer.php", {
     method: "POST",

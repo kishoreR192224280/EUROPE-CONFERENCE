@@ -2,13 +2,23 @@ import { createContext, useContext, useState, ReactNode } from "react";
 
 export const ACTIVE_ADMIN_SESSION_ID_STORAGE_KEY = "activeAdminSessionId";
 
-export type QuestionType = "multiple_choice" | "sorting" | "label_image";
+export type QuestionType = "multiple_choice" | "sorting" | "label_image" | "matching";
+
+export type MatchingPair = {
+  id: string;
+  leftText: string;
+  leftImageUrl?: string;
+  rightText: string;
+  rightImageUrl?: string;
+};
 
 export type LabelImageZone = {
   id: string;
   marker: number;
   x: number;
   y: number;
+  width?: number;
+  height?: number;
   prompt: string;
   acceptedAnswers?: string[];
 };
@@ -24,6 +34,7 @@ export interface Question {
   items?: string[];
   correctOrder?: string[];
   labels?: LabelImageZone[];
+  matchingPairs?: MatchingPair[];
   timer: number;
   showLeaderboardAfter: boolean;
 }
@@ -48,6 +59,28 @@ export interface Session {
     responseData?: {
       items?: string[];
       labels?: Record<string, string>;
+      matches?: Record<string, string>;
+      labelResults?: Record<
+        string,
+        {
+          submitted: string;
+          isCorrect: boolean;
+          acceptedAnswers: string[];
+        }
+      >;
+      matchingResults?: Record<
+        string,
+        {
+          selectedPairId: string | null;
+          selectedRightText: string;
+          correctRightText: string;
+          selectedRightLabel?: string;
+          correctRightLabel?: string;
+          selectedRightImageUrl?: string | null;
+          correctRightImageUrl?: string | null;
+          isCorrect: boolean;
+        }
+      >;
     } | null;
     isCorrect: boolean;
     responseTimeMs: number | null;
@@ -68,6 +101,10 @@ export interface Session {
     participantCount: number;
     answersSubmitted: number;
     correctAnswers: number;
+    fullyCorrectAnswers?: number;
+    partiallyCorrectAnswers?: number;
+    correctParts?: number;
+    totalParts?: number;
     totalResponseTimeMs: number;
   } | null;
   leaderboard?: Array<{
@@ -95,6 +132,14 @@ export interface Session {
     answeredParticipants: number;
     waitingParticipants: number;
   };
+  currentQuestionStats?: {
+    optionCounts?: Array<{
+      name: string;
+      optionText: string;
+      count: number;
+      isCorrect: boolean;
+    }>;
+  } | null;
 }
 
 interface SessionContextType {
