@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router";
-import { Users, Trophy, Award } from "lucide-react";
+import { useNavigate, useParams } from "react-router";
+import { ArrowRight, MonitorPlay, Search, Users, Trophy, Award } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
 import confetti from "canvas-confetti";
 import { useSession } from "../context/SessionContext";
 import { getPublicSession } from "../api/liveSessionApi";
+import { toast } from "sonner";
 
 function getPrimaryLabelAnswer(label: { acceptedAnswers?: string[]; prompt: string; marker: number }) {
   return label.acceptedAnswers?.find((answer) => answer.trim())?.trim() || label.prompt || `Item ${label.marker}`;
@@ -18,6 +19,131 @@ function shuffleMatchingPairs<T>(items: T[]) {
     [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
   }
   return next;
+}
+
+export function BigScreenEntry() {
+  const navigate = useNavigate();
+  const { setSession } = useSession();
+  const [code, setCode] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleOpenSession = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const normalizedCode = code.trim().toUpperCase();
+    if (!normalizedCode) {
+      toast.error("Please enter a session code");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const session = await getPublicSession(normalizedCode);
+      if (session.status === "ended" || session.status === "archived") {
+        toast.error("This session has already ended and cannot be opened on the big screen");
+        return;
+      }
+
+      setSession(session);
+      navigate(`/big-screen/${normalizedCode}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to find that session");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#0f172a] px-6 py-10 text-white sm:px-10">
+      <div className="absolute inset-0 z-0 overflow-hidden">
+        <div className="absolute left-[-10%] top-[-10%] h-[45%] w-[45%] rounded-full bg-indigo-600/20 blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] h-[45%] w-[45%] rounded-full bg-blue-600/20 blur-[120px]"></div>
+      </div>
+
+      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full overflow-hidden rounded-[3rem] border border-white/10 bg-white/5 shadow-2xl backdrop-blur-3xl"
+        >
+          <div className="grid lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="border-b border-white/10 px-8 py-10 lg:border-b-0 lg:border-r lg:px-12 lg:py-14">
+              <div className="mb-8 flex h-20 w-20 items-center justify-center rounded-[2rem] bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-2xl shadow-indigo-500/20">
+                <MonitorPlay size={36} />
+              </div>
+              <p className="text-sm font-black uppercase tracking-[0.24em] text-indigo-300">Projector Access</p>
+              <h1 className="mt-3 text-4xl font-black tracking-tight text-white sm:text-5xl">
+                Open Any Live Session on the Big Screen
+              </h1>
+              <p className="mt-5 max-w-xl text-base font-semibold leading-7 text-slate-300 sm:text-lg">
+                Enter the session code to load the projector view. Draft, waiting, active, results, and leaderboard
+                sessions can be opened here. Ended sessions are blocked automatically.
+              </p>
+
+              <div className="mt-8 grid gap-4 sm:grid-cols-3">
+                {[
+                  { label: "Fast access", value: "Jump into the projector instantly" },
+                  { label: "Live sync", value: "Uses real session status from backend" },
+                  { label: "Safe guard", value: "Prevents ended sessions from opening" },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-[1.75rem] border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">{item.label}</p>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="px-8 py-10 lg:px-12 lg:py-14">
+              <div className="rounded-[2.5rem] border border-white/10 bg-[#121b39]/70 p-6 shadow-inner shadow-black/10 sm:p-8">
+                <p className="text-sm font-black uppercase tracking-[0.24em] text-indigo-300">Session Lookup</p>
+                <h2 className="mt-3 text-3xl font-black tracking-tight text-white">Enter Session Code</h2>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-300">
+                  Use the code generated when the quiz was created. Example: <span className="font-black text-white">87AA4F</span>
+                </p>
+
+                <form onSubmit={handleOpenSession} className="mt-8 space-y-5">
+                  <label className="block">
+                    <span className="mb-3 block text-xs font-black uppercase tracking-[0.2em] text-indigo-300">
+                      Big Screen Code
+                    </span>
+                    <div className="flex items-center gap-3 rounded-[1.75rem] border border-white/10 bg-white/5 px-5 py-4 shadow-lg shadow-black/5 transition focus-within:border-indigo-400">
+                      <Search size={18} className="shrink-0 text-indigo-300" />
+                      <input
+                        type="text"
+                        value={code}
+                        onChange={(event) => setCode(event.target.value.toUpperCase())}
+                        placeholder="Enter code like ABC123"
+                        className="w-full bg-transparent text-lg font-black uppercase tracking-[0.24em] text-white outline-none placeholder:text-slate-500"
+                        maxLength={12}
+                        autoFocus
+                      />
+                    </div>
+                  </label>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="flex w-full items-center justify-center gap-3 rounded-[1.75rem] bg-gradient-to-r from-indigo-500 to-blue-600 px-6 py-4 text-base font-black text-white shadow-2xl shadow-indigo-500/20 transition hover:from-indigo-400 hover:to-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isLoading ? "Checking session..." : "Open Big Screen"}
+                    {!isLoading ? <ArrowRight size={18} /> : null}
+                  </button>
+                </form>
+
+                <div className="mt-6 rounded-[1.5rem] border border-indigo-400/15 bg-indigo-500/10 px-4 py-4">
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">What happens next</p>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">
+                    If the code is valid and the session has not ended, we’ll open the matching projector view immediately.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
 }
 
 export function BigScreen() {
@@ -203,13 +329,13 @@ export function BigScreen() {
               exit={{ opacity: 0, y: -20 }}
               className="w-full space-y-16"
             >
-              <div className="bg-white/5 backdrop-blur-3xl border border-white/10 p-16 rounded-[4rem] shadow-2xl relative overflow-hidden group">
+              <div className="bg-white/5 backdrop-blur-3xl border border-white/10 px-16 pb-16 pt-10 rounded-[4rem] shadow-2xl relative overflow-hidden group">
                 <div className="absolute top-0 left-0 w-2 h-full bg-indigo-600"></div>
-                <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-32 h-32 bg-indigo-600 rounded-[2.5rem] flex flex-col items-center justify-center text-5xl font-black shadow-[0_0_50px_rgba(79,70,229,0.5)] border-8 border-[#0f172a] group-hover:scale-110 transition-transform">
-                  <span className={timeLeft < 6 ? "text-red-400 animate-pulse" : "text-white"}>{timeLeft}</span>
-                  <span className="text-[10px] uppercase tracking-widest leading-none mt-1">Sec</span>
+                <div className="mx-auto mb-8 flex h-28 w-28 flex-col items-center justify-center rounded-[2rem] bg-gradient-to-b from-indigo-500 to-indigo-700 text-5xl font-black shadow-[0_0_50px_rgba(79,70,229,0.35)] ring-4 ring-indigo-300/10 group-hover:scale-105 transition-transform">
+                  <span className={timeLeft < 6 ? "text-red-300 animate-pulse" : "text-white"}>{timeLeft}</span>
+                  <span className="mt-1 text-[10px] uppercase tracking-[0.28em] leading-none text-indigo-100">Sec</span>
                 </div>
-                <h2 className="text-6xl font-black text-center pt-10 leading-tight tracking-tight">
+                <h2 className="text-6xl font-black text-center leading-tight tracking-tight">
                   {currentQuestion.text}
                 </h2>
                 {currentQuestion.instructions ? (
@@ -276,51 +402,66 @@ export function BigScreen() {
                   </div>
                 </div>
               ) : currentQuestion.questionType === "matching" ? (
-                <div className="grid gap-8 lg:grid-cols-2">
-                  <div className="rounded-[3rem] border border-white/10 bg-white/5 p-8 backdrop-blur-xl">
-                    <p className="mb-6 text-sm font-black uppercase tracking-[0.22em] text-blue-300">Options</p>
-                    <div className="space-y-4">
-                      {matchingPairs.map((pair, index) => (
-                        <div key={pair.id} className="rounded-[2rem] border border-white/10 bg-white/5 p-5">
-                          <div className="flex items-start gap-4">
-                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-600 text-2xl font-black text-white shadow-xl">
-                              {index + 1}
-                            </div>
-                            <div className="min-w-0 flex-1 space-y-3">
-                              {pair.leftImageUrl ? (
-                                <div className="overflow-hidden rounded-2xl bg-white/95">
-                                  <img src={pair.leftImageUrl} alt={pair.leftText} className="h-36 w-full object-contain" />
-                                </div>
-                              ) : null}
-                              <p className="text-3xl font-black tracking-tight text-white">{pair.leftText}</p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                <div className="rounded-[3rem] border border-white/10 bg-white/5 p-8 backdrop-blur-xl">
+                  <div className="mb-6 grid gap-6 lg:grid-cols-2">
+                    <div className="rounded-[2rem] border border-white/10 bg-white/5 px-8 py-5">
+                      <p className="text-sm font-black uppercase tracking-[0.22em] text-blue-300">Options</p>
+                    </div>
+                    <div className="rounded-[2rem] border border-white/10 bg-white/5 px-8 py-5">
+                      <p className="text-sm font-black uppercase tracking-[0.22em] text-violet-300">Match Bank</p>
                     </div>
                   </div>
 
-                  <div className="rounded-[3rem] border border-white/10 bg-white/5 p-8 backdrop-blur-xl">
-                    <p className="mb-6 text-sm font-black uppercase tracking-[0.22em] text-violet-300">Match Bank</p>
-                    <div className="space-y-4">
-                      {shuffledMatchingPairs.map((pair, index) => (
-                        <div key={pair.id} className="rounded-[2rem] border border-white/10 bg-white/5 p-5">
-                          <div className="flex items-start gap-4">
-                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-violet-600 text-2xl font-black text-white shadow-xl">
-                              {String.fromCharCode(65 + index)}
+                  <div className="space-y-5">
+                    {matchingPairs.map((pair, index) => {
+                      const matchBankItem = shuffledMatchingPairs[index] ?? pair;
+
+                      return (
+                        <div key={pair.id} className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+                          <div className="rounded-[2rem] border border-white/10 bg-white/5 p-5">
+                            <div className="flex h-full items-start gap-4">
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-600 text-2xl font-black text-white shadow-xl">
+                                {index + 1}
+                              </div>
+                              <div className="flex min-h-[184px] min-w-0 flex-1 flex-col justify-center space-y-3">
+                                {pair.leftImageUrl ? (
+                                  <div className="overflow-hidden rounded-2xl bg-white/95">
+                                    <img src={pair.leftImageUrl} alt={pair.leftText} className="h-36 w-full object-contain" />
+                                  </div>
+                                ) : null}
+                                {pair.leftText ? (
+                                  <p className="text-3xl font-black tracking-tight text-white">{pair.leftText}</p>
+                                ) : (
+                                  <p className="text-xl font-semibold text-slate-300">Image prompt</p>
+                                )}
+                              </div>
                             </div>
-                            <div className="min-w-0 flex-1 space-y-3">
-                              {pair.rightImageUrl ? (
-                                <div className="overflow-hidden rounded-2xl bg-white/95">
-                                  <img src={pair.rightImageUrl} alt={pair.rightText} className="h-36 w-full object-contain" />
-                                </div>
-                              ) : null}
-                              <p className="text-3xl font-black tracking-tight text-white">{pair.rightText}</p>
+                          </div>
+
+                          <div className="rounded-[2rem] border border-white/10 bg-white/5 p-5">
+                            <div className="flex h-full items-start gap-4">
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-violet-600 text-2xl font-black text-white shadow-xl">
+                                {String.fromCharCode(65 + index)}
+                              </div>
+                              <div className="flex min-h-[184px] min-w-0 flex-1 flex-col justify-center space-y-3">
+                                {matchBankItem.rightImageUrl ? (
+                                  <div className="overflow-hidden rounded-2xl bg-white/95">
+                                    <img
+                                      src={matchBankItem.rightImageUrl}
+                                      alt={matchBankItem.rightText}
+                                      className="h-36 w-full object-contain"
+                                    />
+                                  </div>
+                                ) : null}
+                                <p className="text-3xl font-black tracking-tight text-white">
+                                  {matchBankItem.rightText || "Image option"}
+                                </p>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
                 </div>
               ) : (

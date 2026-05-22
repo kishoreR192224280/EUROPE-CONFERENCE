@@ -2,22 +2,73 @@ import { BASE_URL } from "./adminAuth";
 import type { Session } from "../context/SessionContext";
 
 export const participantStorageKey = (code: string) => `participant:${code.toUpperCase()}`;
+export const participantSocketStorageKey = (code: string) => `participant-socket:${code.toUpperCase()}`;
+export const participantTabStorageKey = (
+  code: string,
+  sessionId: string | number,
+  studentId: string | number
+) => `participant-tab:${code.toUpperCase()}:${sessionId}:${studentId}`;
+export const studentSessionSocketKey = (sessionId: string | number, studentId: string | number) =>
+  `${sessionId}-${studentId}`;
+
+export type ParticipantRecord = {
+  id: number;
+  studentId?: number;
+  name: string;
+  phoneNumber: string | null;
+  token: string;
+};
+
+export function getParticipantStudentId(participant: ParticipantRecord) {
+  return participant.studentId ?? participant.id;
+}
+
+function createClientId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function getOrCreateParticipantTabId(
+  code: string,
+  sessionId: string | number,
+  studentId: string | number
+) {
+  const key = participantTabStorageKey(code, sessionId, studentId);
+  const existingTabId = sessionStorage.getItem(key);
+  if (existingTabId) {
+    return existingTabId;
+  }
+
+  const nextTabId = createClientId();
+  sessionStorage.setItem(key, nextTabId);
+  return nextTabId;
+}
+
+export function parseParticipantRecord(serialized: string | null | undefined) {
+  if (!serialized) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(serialized) as ParticipantRecord;
+  } catch {
+    return null;
+  }
+}
 
 type ApiFailure = {
   success: false;
   error: string;
+  code?: string;
 };
 
 type JoinSessionResponse =
   | {
       success: true;
-      participant: {
-        id: number;
-        studentId?: number;
-        name: string;
-        phoneNumber: string | null;
-        token: string;
-      };
+      participant: ParticipantRecord;
       session: Session;
     }
   | ApiFailure;
@@ -36,7 +87,11 @@ type SubmitAnswerResponse =
         isCorrect: boolean;
         scoreAwarded: number;
         responseTimeMs: number | null;
+        selectedOptionId?: number | null;
         timedOut?: boolean;
+        deadlineExpired?: boolean;
+        serverNow?: string;
+        timeRemainingSeconds?: number;
         correctParts?: number;
         totalParts?: number;
         labelResults?: Record<
@@ -123,7 +178,7 @@ export async function getAdminSession(sessionId: string | number) {
 
 export async function updateAdminSessionState(
   sessionId: string | number,
-  action: "launch_next" | "reveal_results" | "show_leaderboard" | "end"
+  action: "launch_next" | "reveal_results" | "show_leaderboard" | "resume" | "end"
 ) {
   const res = await fetch(BASE_URL + "update_session_state.php", {
     method: "POST",
@@ -144,6 +199,8 @@ export async function submitParticipantAnswer(payload: {
   participantToken: string;
   questionId: string | number;
   selectedOptionIndex: number | null;
+  selectedOptionId?: number | null;
+  socketId?: string | null;
     responseData?: {
       items?: string[];
       labels?: Record<string, string>;
@@ -159,7 +216,11 @@ export async function submitParticipantAnswer(payload: {
 
   const data = await readJson<SubmitAnswerResponse>(res);
   if (!res.ok || !data.success) {
-    throw new Error(data.success ? "Failed to submit answer" : data.error);
+    const error = new Error(data.success ? "Failed to submit answer" : data.error);
+    if (!data.success && data.code) {
+      (error as Error & { code?: string }).code = data.code;
+    }
+    throw error;
   }
 
   return data.answer;

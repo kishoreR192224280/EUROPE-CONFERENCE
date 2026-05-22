@@ -4,7 +4,7 @@ import { User, IdCard, Play, Users, ArrowLeft, Phone } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import { useSession } from "../../context/SessionContext";
-import { getPublicSession, joinLiveSession, participantStorageKey } from "../../api/liveSessionApi";
+import { getPublicSession, joinLiveSession, parseParticipantRecord, participantStorageKey } from "../../api/liveSessionApi";
 
 const COUNTRY_CODES = [
   { label: "Australia", value: "+61" },
@@ -52,10 +52,12 @@ export function StudentJoin() {
   const navigate = useNavigate();
   const { code: routeCode } = useParams();
   const { setSession } = useSession();
+  const defaultJoinName = "Test Student";
+  const defaultJoinPhoneNumber = "9876543210";
   const [formData, setFormData] = useState({
-    name: "",
+    name: defaultJoinName,
     countryCode: "+91",
-    phoneNumber: "",
+    phoneNumber: defaultJoinPhoneNumber,
     code: routeCode?.toUpperCase() ?? ""
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -86,13 +88,7 @@ export function StudentJoin() {
     const loadSession = async () => {
       try {
         const participantToken = existingParticipant
-          ? (() => {
-              try {
-                return (JSON.parse(existingParticipant) as { token?: string }).token ?? "";
-              } catch {
-                return "";
-              }
-            })()
+          ? parseParticipantRecord(existingParticipant)?.token ?? ""
           : "";
 
         const session = await getPublicSession(normalizedCode, participantToken);

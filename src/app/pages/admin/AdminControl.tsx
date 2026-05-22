@@ -6,8 +6,13 @@ import { useSession } from "../../context/SessionContext";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { toast } from "sonner";
 import { getAdminSession, updateAdminSessionState } from "../../api/liveSessionApi";
+import { io, type Socket } from "socket.io-client";
 
 const MCQ_BAR_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
+
+function getSocketServerUrl() {
+  return import.meta.env.VITE_SOCKET_URL || "http://localhost:3001";
+}
 
 function shuffleMatchingPairs<T>(items: T[]) {
   const next = [...items];
@@ -66,6 +71,36 @@ export function AdminControl() {
     };
   }, [normalizedSessionId, setSession]);
 
+  useEffect(() => {
+    if (!normalizedSessionId) {
+      return;
+    }
+
+    const socket: Socket = io(getSocketServerUrl(), {
+      transports: ["websocket"],
+      withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000,
+    });
+
+    const joinAsHost = () => {
+      socket.emit("admin:join", { sessionId: normalizedSessionId });
+    };
+
+    socket.on("connect", joinAsHost);
+    socket.on("reconnect", joinAsHost);
+    joinAsHost();
+
+    return () => {
+      socket.off("connect", joinAsHost);
+      socket.off("reconnect", joinAsHost);
+      socket.disconnect();
+    };
+  }, [normalizedSessionId]);
+
   const currentQuestion = currentSession
     ? currentSession.currentQuestion ?? currentSession.questions[currentSession.currentQuestionIndex]
     : null;
@@ -75,6 +110,7 @@ export function AdminControl() {
       ? currentSession.questions[currentSession.currentQuestionIndex]?.matchingPairs ?? []
       : []);
   const isQuestionActive = currentSession?.status === "active";
+  const isSessionPaused = currentSession?.status === "paused";
   const isSessionEnded = currentSession?.status === "ended";
   const shouldOfferLeaderboard =
     !!currentQuestion &&
@@ -179,7 +215,7 @@ export function AdminControl() {
   }
 
   const sendAction = async (
-    action: "launch_next" | "reveal_results" | "show_leaderboard" | "end",
+    action: "launch_next" | "reveal_results" | "show_leaderboard" | "resume" | "end",
     successMessage: string
   ) => {
     if (!normalizedSessionId) {
@@ -219,6 +255,10 @@ export function AdminControl() {
     void sendAction("end", "Session ended");
   };
 
+  const resumeSession = () => {
+    void sendAction("resume", "Session resumed");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
@@ -240,6 +280,13 @@ export function AdminControl() {
           </div>
         </div>
         <div className="flex gap-3">
+          <button 
+            onClick={resumeSession}
+            disabled={isBusy || !isSessionPaused}
+            className="px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-semibold transition-colors disabled:opacity-60"
+          >
+            Resume Session
+          </button>
           <button 
             onClick={endSession}
             disabled={isBusy || isSessionEnded}
@@ -284,6 +331,35 @@ export function AdminControl() {
                   Launch Question 1
                   <ArrowRight size={24} />
                 </button>
+              </div>
+            ) : currentSession.status === "paused" ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
+                <div className="w-24 h-24 bg-amber-50 text-amber-600 rounded-3xl flex items-center justify-center">
+                  <Pause size={48} fill="currentColor" />
+                </div>
+                <div className="max-w-lg">
+                  <h3 className="text-3xl font-bold text-gray-900">Session Paused Safely</h3>
+                  <p className="text-gray-500 mt-3 text-lg">
+                    {currentSession.pauseReason || "The host connection was interrupted. Student timers are paused and answers are disabled."}
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={resumeSession}
+                    disabled={isBusy}
+                    className="px-10 py-4 bg-emerald-600 text-white font-black text-lg rounded-2xl hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 flex items-center gap-3 active:scale-95 disabled:opacity-60"
+                  >
+                    Resume Session
+                    <Play size={24} fill="currentColor" />
+                  </button>
+                  <button
+                    onClick={endSession}
+                    disabled={isBusy || isSessionEnded}
+                    className="px-8 py-4 border border-gray-200 text-gray-700 font-black rounded-2xl hover:bg-gray-50 transition-all disabled:opacity-60"
+                  >
+                    End Session
+                  </button>
+                </div>
               </div>
             ) : currentSession.status === "ended" ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">

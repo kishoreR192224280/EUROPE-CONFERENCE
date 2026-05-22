@@ -10,7 +10,8 @@ import { Reports } from "./pages/admin/Reports";
 import { StudentJoin } from "./pages/student/Join";
 import { StudentWaiting } from "./pages/student/Waiting";
 import { StudentQuestion } from "./pages/student/Question";
-import { BigScreen } from "./pages/BigScreen";
+import { StudentSessionExpired } from "./pages/student/SessionExpired";
+import { BigScreen, BigScreenEntry } from "./pages/BigScreen";
 
 export const router = createBrowserRouter([
   {
@@ -23,6 +24,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <StudentJoin /> },
       { path: ":code", element: <StudentJoin /> },
+      { path: ":code/expired", element: <StudentSessionExpired /> },
       { path: ":code/waiting", element: <StudentWaiting /> },
       { path: ":code/question", element: <StudentQuestion /> },
     ],
@@ -44,8 +46,13 @@ export const router = createBrowserRouter([
     children: [
       { path: "join", element: <StudentJoin /> },
       { path: "session/:code", element: <StudentWaiting /> },
+      { path: "session/:code/expired", element: <StudentSessionExpired /> },
       { path: "session/:code/question", element: <StudentQuestion /> },
     ],
+  },
+  {
+    path: "/big-screen",
+    element: <BigScreenEntry />,
   },
   {
     path: "/big-screen/:code",

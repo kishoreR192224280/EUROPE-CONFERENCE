@@ -30,6 +30,7 @@ export interface Question {
   instructions?: string;
   mediaUrl?: string;
   options: string[];
+  optionIds?: number[];
   correctAnswer?: number;
   items?: string[];
   correctOrder?: string[];
@@ -49,13 +50,14 @@ export interface Session {
   introVideoUrl?: string;
   questions: Question[];
   questionCount?: number;
-  status: "draft" | "scheduled" | "waiting" | "active" | "results" | "leaderboard" | "ended" | "archived";
+  status: "draft" | "scheduled" | "waiting" | "active" | "paused" | "results" | "leaderboard" | "ended" | "archived";
   currentQuestionId?: string | number | null;
   currentQuestionIndex: number;
   currentQuestion?: Question | null;
   currentQuestionResponse?: {
     id: number;
     selectedOptionIndex: number | null;
+    selectedOptionId?: number | null;
     responseData?: {
       items?: string[];
       labels?: Record<string, string>;
@@ -89,6 +91,11 @@ export interface Session {
     submitted: true;
   } | null;
   questionStartedAt?: string | null;
+  serverNow?: string | null;
+  hostConnectionStatus?: "connected" | "reconnecting" | "disconnected";
+  hostLastSeenAt?: string | null;
+  pausedAt?: string | null;
+  pauseReason?: string | null;
   timeRemainingSeconds?: number | null;
   participants: number;
   participantSummary?: {
@@ -146,6 +153,7 @@ interface SessionContextType {
   currentSession: Session | null;
   setSession: (session: Session) => void;
   updateSession: (updates: Partial<Session>) => void;
+  clearSession: () => void;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
@@ -181,8 +189,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const clearSession = () => {
+    setCurrentSession(null);
+  };
+
   return (
-    <SessionContext.Provider value={{ currentSession, setSession, updateSession }}>
+    <SessionContext.Provider value={{ currentSession, setSession, updateSession, clearSession }}>
       {children}
     </SessionContext.Provider>
   );

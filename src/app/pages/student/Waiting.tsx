@@ -1,9 +1,16 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
-import { Loader2, Users, CheckCircle2 } from "lucide-react";
+import { Loader2, Users, CheckCircle2, WifiOff } from "lucide-react";
 import { motion } from "motion/react";
 import { useSession } from "../../context/SessionContext";
-import { getPublicSession, participantStorageKey } from "../../api/liveSessionApi";
+import {
+  getPublicSession,
+  participantSocketStorageKey,
+  participantStorageKey,
+  parseParticipantRecord,
+} from "../../api/liveSessionApi";
+import { useParticipantSessionSocket } from "../../hooks/useParticipantSessionSocket";
+import { useSingleParticipantTab } from "../../hooks/useSingleParticipantTab";
 import { StudentSessionEnded } from "./StudentSessionEnded";
 
 function getResumeRoute(code: string, status?: string) {
@@ -17,29 +24,62 @@ function getResumeRoute(code: string, status?: string) {
 export function StudentWaiting() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { currentSession, setSession } = useSession();
+  const { currentSession, setSession, clearSession } = useSession();
   const participantJson = code ? sessionStorage.getItem(participantStorageKey(code)) : null;
-  const participant = participantJson
-    ? (JSON.parse(participantJson) as { name?: string; phoneNumber?: string | null })
-    : null;
+  const participant = useMemo(() => parseParticipantRecord(participantJson), [participantJson]);
+
+  const revokeParticipantAccess = () => {
+    if (!code) {
+      return;
+    }
+
+    sessionStorage.removeItem(participantStorageKey(code));
+    sessionStorage.removeItem(participantSocketStorageKey(code));
+    clearSession();
+    navigate(`/join/${code}/expired`, { replace: true });
+  };
+
+  const expireConnection = () => {
+    if (!code) {
+      return;
+    }
+
+    sessionStorage.removeItem(participantStorageKey(code));
+    sessionStorage.removeItem(participantSocketStorageKey(code));
+    clearSession();
+    navigate(`/join/${code}/expired?reason=connection`, { replace: true });
+  };
+
+  useSingleParticipantTab({
+    code,
+    participant,
+    sessionId: currentSession?.id ?? null,
+    enabled: Boolean(code && participant && currentSession?.id !== undefined && currentSession?.id !== null),
+    onDuplicate: revokeParticipantAccess,
+  });
+
+  const participantSocket = useParticipantSessionSocket({
+    code,
+    participant,
+    sessionId: currentSession?.id ?? null,
+    enabled: Boolean(code && participant && currentSession?.id !== undefined && currentSession?.id !== null),
+    onForceLogout: revokeParticipantAccess,
+    onConnectionExpired: expireConnection,
+  });
 
   useEffect(() => {
     if (!code) {
       return;
     }
 
-    const participant = sessionStorage.getItem(participantStorageKey(code));
-    if (!participant) {
+    const participantSession = sessionStorage.getItem(participantStorageKey(code));
+    if (!participantSession) {
       navigate(`/join/${code}`, { replace: true });
       return;
     }
 
     const participantToken = (() => {
-      try {
-        return (JSON.parse(participant) as { token?: string }).token ?? "";
-      } catch {
-        return "";
-      }
+      return parseParticipantRecord(participantSession)?.token ?? "";
     })();
 
     let isMounted = true;
@@ -100,6 +140,15 @@ export function StudentWaiting() {
 
   return (
     <div className="flex flex-col items-center p-8 pb-12 text-center min-h-[400px] justify-center">
+      {participantSocket.isReconnecting ? (
+        <div className="mb-5 flex w-full max-w-sm items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-amber-800 shadow-sm">
+          <WifiOff size={18} className="shrink-0" />
+          <div>
+            <p className="text-sm font-black">Reconnecting...</p>
+            <p className="text-xs font-semibold">Your place is reserved while the connection recovers.</p>
+          </div>
+        </div>
+      ) : null}
       <motion.div
         animate={{ 
           scale: [1, 1.1, 1],

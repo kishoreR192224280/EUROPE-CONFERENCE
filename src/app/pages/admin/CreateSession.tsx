@@ -596,7 +596,7 @@ function MatchingEditor({
 
   const handlePairImageUpload = async (
     pairId: string,
-    side: "left" | "right",
+    side: "left",
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = event.target.files?.[0];
@@ -614,12 +614,7 @@ function MatchingEditor({
 
     try {
       const uploaded = await uploadLabelImage(file);
-      onUpdatePair(
-        pairId,
-        side === "left"
-          ? { leftImageUrl: uploaded.url }
-          : { rightImageUrl: uploaded.url }
-      );
+      onUpdatePair(pairId, { leftImageUrl: uploaded.url });
       toast.success("Match image uploaded successfully.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to upload image");
@@ -728,69 +723,20 @@ function MatchingEditor({
                 <label className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">
                   Match {String.fromCharCode(65 + pairIndex)}
                 </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={(node) => {
-                      fileInputRefs.current[`${pair.id}_right`] = node;
-                    }}
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) => void handlePairImageUpload(pair.id, "right", event)}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRefs.current[`${pair.id}_right`]?.click()}
-                    disabled={uploadingTarget === `${pair.id}_right`}
-                    className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <ImageIcon size={12} />
-                    {uploadingTarget === `${pair.id}_right` ? "Uploading" : pair.rightImageUrl ? "Replace image" : "Add image"}
-                  </button>
-                  {pair.rightImageUrl ? (
-                    <button
-                      type="button"
-                      onClick={() => onUpdatePair(pair.id, { rightImageUrl: "" })}
-                      className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
-                      title="Remove right image"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  ) : null}
-                </div>
+                <span className="rounded-full bg-violet-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-violet-600">
+                  Text only
+                </span>
               </div>
-              {pair.rightImageUrl ? (
-                <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-                  <img
-                    src={pair.rightImageUrl}
-                    alt={`Right match visual ${pairIndex + 1}`}
-                    className="h-28 w-full object-contain bg-gray-50"
-                  />
-                </div>
-              ) : null}
-              {pair.rightImageUrl ? (
-                pair.rightText.trim() ? (
-                  <input
-                    type="text"
-                    value={pair.rightText}
-                    onChange={(e) => onUpdatePair(pair.id, { rightText: e.target.value })}
-                    placeholder="Optional caption"
-                    className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500"
-                  />
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-violet-200 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-700">
-                    This side will use the image only. Add text later only if you want a caption.
-                  </div>
-                )
-              ) : (
-                <input
-                  type="text"
-                  value={pair.rightText}
-                  onChange={(e) => onUpdatePair(pair.id, { rightText: e.target.value })}
-                  placeholder="e.g. Brings oxygen into the body"
-                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500"
-                />
-              )}
+              <input
+                type="text"
+                value={pair.rightText}
+                onChange={(e) => onUpdatePair(pair.id, { rightText: e.target.value })}
+                placeholder="e.g. Brings oxygen into the body"
+                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="text-xs font-semibold text-gray-400">
+                Keep the right side as a text answer. Add visuals only on the left option side.
+              </p>
             </div>
 
             <div className="flex items-center justify-center pt-6">
@@ -1049,11 +995,11 @@ export function CreateSession() {
         const invalidPair = question.matchingPairs.find(
           (pair) =>
             (!pair.leftText.trim() && !pair.leftImageUrl?.trim()) ||
-            (!pair.rightText.trim() && !pair.rightImageUrl?.trim())
+            !pair.rightText.trim()
         );
 
         if (invalidPair) {
-          toast.error(`Please add text or an image for every left and right item in question ${index + 1}`);
+          toast.error(`Please add a left item and a right-side text answer for every matching pair in question ${index + 1}`);
           return false;
         }
       }

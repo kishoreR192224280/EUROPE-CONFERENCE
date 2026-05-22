@@ -1,13 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Award, CheckCircle2, Search, Timer, XCircle } from "lucide-react";
+import { Award, CheckCircle2, Search, Timer, WifiOff, XCircle } from "lucide-react";
 import { motion } from "motion/react";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { useSession } from "../../context/SessionContext";
-import { getPublicSession, participantStorageKey, submitParticipantAnswer } from "../../api/liveSessionApi";
+import {
+  getPublicSession,
+  participantSocketStorageKey,
+  participantStorageKey,
+  parseParticipantRecord,
+  submitParticipantAnswer,
+} from "../../api/liveSessionApi";
 import { toast } from "sonner";
 import { StudentSessionEnded } from "./StudentSessionEnded";
+import { useParticipantSessionSocket } from "../../hooks/useParticipantSessionSocket";
+import { useSingleParticipantTab } from "../../hooks/useSingleParticipantTab";
 
 const SORTING_DND_TYPE = "sorting-item";
 
@@ -109,7 +117,7 @@ function SortableSortingRow({
 export function StudentQuestion() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { currentSession, setSession } = useSession();
+  const { currentSession, setSession, clearSession } = useSession();
 
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [sortingItems, setSortingItems] = useState<string[]>([]);
@@ -124,21 +132,60 @@ export function StudentQuestion() {
   const [timeLeft, setTimeLeft] = useState(30);
   const [isFinished, setIsFinished] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAccessRevoked, setIsAccessRevoked] = useState(false);
 
   const participantJson = code ? sessionStorage.getItem(participantStorageKey(code)) : null;
-  const participant = participantJson
-    ? (JSON.parse(participantJson) as { name?: string; phoneNumber?: string | null })
-    : null;
+  const participant = useMemo(() => parseParticipantRecord(participantJson), [participantJson]);
 
-  const currentQuestion = currentSession
-    ? currentSession.currentQuestion ?? currentSession.questions[currentSession.currentQuestionIndex]
-    : null;
+  const revokeParticipantAccess = () => {
+    if (!code) {
+      return;
+    }
+
+    setIsAccessRevoked(true);
+    sessionStorage.removeItem(participantStorageKey(code));
+    sessionStorage.removeItem(participantSocketStorageKey(code));
+    clearSession();
+    navigate(`/join/${code}/expired`, { replace: true });
+  };
+
+  const expireConnection = () => {
+    if (!code) {
+      return;
+    }
+
+    setIsAccessRevoked(true);
+    sessionStorage.removeItem(participantStorageKey(code));
+    sessionStorage.removeItem(participantSocketStorageKey(code));
+    clearSession();
+    navigate(`/join/${code}/expired?reason=connection`, { replace: true });
+  };
+
+  useSingleParticipantTab({
+    code,
+    participant,
+    sessionId: currentSession?.id ?? null,
+    enabled: Boolean(code && participant && currentSession?.id !== undefined && currentSession?.id !== null),
+    onDuplicate: revokeParticipantAccess,
+  });
+
+  const participantSocket = useParticipantSessionSocket({
+    code,
+    participant,
+    sessionId: currentSession?.id ?? null,
+    enabled: Boolean(code && participant && currentSession?.id !== undefined && currentSession?.id !== null),
+    onForceLogout: revokeParticipantAccess,
+    onConnectionExpired: expireConnection,
+  });
+
+  const currentQuestion = currentSession?.currentQuestion ?? null;
   const totalQuestions = currentSession ? currentSession.questionCount ?? currentSession.questions.length : 0;
   const currentQuestionResponse = currentSession?.currentQuestionResponse ?? null;
   const hasAnswerReveal =
     currentSession?.status === "results" ||
     currentSession?.status === "leaderboard" ||
     currentSession?.status === "ended";
+  const isSessionPaused = currentSession?.status === "paused";
 
   const hydrateLocalQuestionState = () => {
     if (!currentQuestion) {
@@ -218,18 +265,28 @@ export function StudentQuestion() {
   };
 
   const submitAnswer = async (optionIndex: number | null, markAsSubmitted = true) => {
-    if (!code || !currentQuestion) {
+    if (!code || !currentQuestion || isAccessRevoked) {
+      return;
+    }
+
+    if (!participantSocket.isConnected) {
+      toast.error("Trying to reconnect. Please wait before submitting.");
       return;
     }
 
     const storedParticipant = sessionStorage.getItem(participantStorageKey(code));
     if (!storedParticipant) {
       toast.error("Participant session not found. Please join again.");
-      navigate("/join");
+      navigate(`/join/${code}`, { replace: true });
       return;
     }
 
-    const parsedParticipant = JSON.parse(storedParticipant) as { token: string };
+    const parsedParticipant = parseParticipantRecord(storedParticipant);
+    if (!parsedParticipant?.token) {
+      toast.error("Participant session not found. Please join again.");
+      navigate(`/join/${code}`, { replace: true });
+      return;
+    }
     let responseData: { items?: string[]; labels?: Record<string, string>; matches?: Record<string, string> } | null = null;
 
     if (currentQuestion.questionType === "sorting" && markAsSubmitted) {
@@ -252,16 +309,47 @@ export function StudentQuestion() {
     setIsSubmitting(true);
 
     try {
-      await submitParticipantAnswer({
+      const selectedOptionId =
+        currentQuestion.questionType === "multiple_choice" && optionIndex !== null
+          ? currentQuestion.optionIds?.[optionIndex] ?? null
+          : null;
+      const answer = await submitParticipantAnswer({
         participantToken: parsedParticipant.token,
         questionId: currentQuestion.id,
         selectedOptionIndex: optionIndex,
+        selectedOptionId,
+        socketId: sessionStorage.getItem(participantSocketStorageKey(code)),
         responseData,
       });
-      setHasSubmitted(markAsSubmitted);
-      setHasRecordedTimeout(!markAsSubmitted);
+      const recordedAsTimeout = Boolean(answer.timedOut || answer.deadlineExpired);
+      setHasSubmitted(markAsSubmitted && !recordedAsTimeout);
+      setHasRecordedTimeout(!markAsSubmitted || recordedAsTimeout);
       setIsFinished(true);
+      if (recordedAsTimeout) {
+        toast.error("Time expired before your answer reached the server. This question was recorded as unanswered.");
+      }
     } catch (err) {
+      if ((err as Error & { code?: string }).code === "ANSWER_ALREADY_SUBMITTED") {
+        setHasSubmitted(true);
+        setIsFinished(true);
+        toast.info("Your answer was already submitted for this question.");
+        return;
+      }
+
+      if ((err as Error & { code?: string }).code === "QUESTION_NOT_ACTIVE") {
+        toast.info("The host has moved to another question. Loading the current session state...");
+        try {
+          const refreshedSession = await getPublicSession(code, parsedParticipant.token);
+          setSession(refreshedSession);
+          if (refreshedSession.status === "waiting") {
+            navigate(`/join/${code}`, { replace: true });
+          }
+        } catch {
+          // Keep the current UI if recovery polling fails; the normal poll will retry.
+        }
+        return;
+      }
+
       toast.error(err instanceof Error ? err.message : "Failed to submit answer");
     } finally {
       setIsSubmitting(false);
@@ -326,7 +414,15 @@ export function StudentQuestion() {
     }
 
     if (currentQuestion.questionType === "multiple_choice") {
-      setSelectedOption(currentQuestionResponse.selectedOptionIndex);
+      const selectedOptionIndexFromId =
+        currentQuestionResponse.selectedOptionId && currentQuestion.optionIds
+          ? currentQuestion.optionIds.findIndex((optionId) => optionId === currentQuestionResponse.selectedOptionId)
+          : -1;
+      setSelectedOption(
+        selectedOptionIndexFromId >= 0
+          ? selectedOptionIndexFromId
+          : currentQuestionResponse.selectedOptionIndex
+      );
     } else if (currentQuestion.questionType === "sorting") {
       setSortingItems(currentQuestionResponse.responseData?.items ?? currentQuestion.items ?? []);
     } else if (currentQuestion.questionType === "label_image") {
@@ -344,6 +440,11 @@ export function StudentQuestion() {
 
   useEffect(() => {
     if (!currentSession || !currentQuestion) {
+      return;
+    }
+
+    if (currentSession.status === "paused") {
+      setTimeLeft(currentSession.timeRemainingSeconds ?? currentQuestion.timer);
       return;
     }
 
@@ -409,6 +510,16 @@ export function StudentQuestion() {
   }
 
   const handleSubmit = async () => {
+    if (!participantSocket.isConnected) {
+      toast.error("Trying to reconnect. Please wait before submitting.");
+      return;
+    }
+
+    if (isSessionPaused) {
+      toast.info("The host paused the quiz. Your timer is safe.");
+      return;
+    }
+
     if (currentQuestion.questionType === "multiple_choice") {
       if (selectedOption === null) {
         return;
@@ -454,10 +565,6 @@ export function StudentQuestion() {
     }
   };
 
-  const isCorrect =
-    currentQuestion.questionType === "multiple_choice"
-      ? hasAnswerReveal && selectedOption !== null && selectedOption === currentQuestion.correctAnswer
-      : Boolean(currentQuestionResponse?.isCorrect || (hasSubmitted && hasAnswerReveal));
   const showRevealResult = hasSubmitted && hasAnswerReveal;
   const timedOutWithoutAnswer = hasRecordedTimeout && !hasSubmitted;
   const hasSubmittedAnswer = hasSubmitted || Boolean(currentQuestionResponse);
@@ -470,6 +577,14 @@ export function StudentQuestion() {
   const matchingResultValues = Object.values(matchingResultMap);
   const matchingCorrectCount = matchingResultValues.filter((result) => result.isCorrect).length;
   const matchingTotalCount = matchingResultValues.length;
+  const isCorrect =
+    currentQuestion.questionType === "multiple_choice"
+      ? hasAnswerReveal && selectedOption !== null && selectedOption === currentQuestion.correctAnswer
+      : currentQuestion.questionType === "sorting"
+        ? Boolean(currentQuestionResponse?.isCorrect)
+        : currentQuestion.questionType === "matching"
+          ? matchingTotalCount > 0 && matchingCorrectCount === matchingTotalCount
+          : labelTotalCount > 0 && labelCorrectCount === labelTotalCount;
 
   const moveSortingItemByDrag = (fromIndex: number, toIndex: number) => {
     setSortingItems((prev) => {
@@ -692,25 +807,19 @@ export function StudentQuestion() {
               return (
                 <div key={pair.id} className="rounded-[2rem] border border-gray-100 bg-white p-4 shadow-sm">
                   <div className="space-y-4">
-                    <div className="relative overflow-hidden rounded-[1.5rem] border border-gray-100 bg-gray-50">
-                      {pair.leftImageUrl ? (
-                        <>
-                          <img src={pair.leftImageUrl} alt={pair.leftText} className="h-40 w-full object-contain" />
-                          <button
-                            type="button"
-                            onClick={() => setMatchingPreviewImage({ src: pair.leftImageUrl!, title: pair.leftText })}
-                            className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-slate-900/70 text-white shadow-lg transition hover:bg-slate-900"
-                            aria-label={`Zoom ${pair.leftText}`}
-                          >
-                            <Search size={16} />
-                          </button>
-                        </>
-                      ) : (
-                        <div className="flex h-40 items-center justify-center px-4 text-center text-sm font-semibold text-gray-400">
-                          No image attached
-                        </div>
-                      )}
-                    </div>
+                    {pair.leftImageUrl ? (
+                      <div className="relative overflow-hidden rounded-[1.5rem] border border-gray-100 bg-gray-50">
+                        <img src={pair.leftImageUrl} alt={pair.leftText} className="h-40 w-full object-contain" />
+                        <button
+                          type="button"
+                          onClick={() => setMatchingPreviewImage({ src: pair.leftImageUrl!, title: pair.leftText })}
+                          className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-slate-900/70 text-white shadow-lg transition hover:bg-slate-900"
+                          aria-label={`Zoom ${pair.leftText}`}
+                        >
+                          <Search size={16} />
+                        </button>
+                      </div>
+                    ) : null}
 
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">
@@ -921,6 +1030,24 @@ export function StudentQuestion() {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col p-6">
+        {participantSocket.isReconnecting ? (
+          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 shadow-sm">
+            <WifiOff size={18} className="shrink-0" />
+            <div>
+              <p className="text-sm font-black">Reconnecting...</p>
+              <p className="text-xs font-semibold">Answer submission is paused until your connection returns.</p>
+            </div>
+          </div>
+        ) : null}
+        {isSessionPaused ? (
+          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 shadow-sm">
+            <WifiOff size={18} className="shrink-0" />
+            <div>
+              <p className="text-sm font-black">Host paused the quiz</p>
+              <p className="text-xs font-semibold">Your timer is paused and your answer will be safe when the host resumes.</p>
+            </div>
+          </div>
+        ) : null}
         {!isFinished ? (
           <>
             <div className="min-h-0 flex-1 overflow-y-auto pr-1">
@@ -938,17 +1065,29 @@ export function StudentQuestion() {
                 disabled={
                   hasSubmitted ||
                   isSubmitting ||
+                  !participantSocket.isConnected ||
+                  isSessionPaused ||
                   (currentQuestion.questionType === "multiple_choice" && selectedOption === null)
                 }
                 className={`w-full rounded-2xl py-5 font-black text-white shadow-xl transition-all ${
                   hasSubmitted ||
                   isSubmitting ||
+                  !participantSocket.isConnected ||
+                  isSessionPaused ||
                   (currentQuestion.questionType === "multiple_choice" && selectedOption === null)
                     ? "cursor-not-allowed bg-gray-200"
                     : "bg-indigo-600 shadow-indigo-200 hover:bg-indigo-700"
                 }`}
               >
-                {hasSubmitted ? "Submitted..." : isSubmitting ? "Submitting..." : "Confirm Answer"}
+                {hasSubmitted
+                  ? "Submitted..."
+                  : isSubmitting
+                    ? "Submitting..."
+                    : isSessionPaused
+                      ? "Paused by Host"
+                      : participantSocket.isConnected
+                      ? "Confirm Answer"
+                      : "Reconnecting..."}
               </button>
             </div>
           </>
