@@ -22,16 +22,15 @@ function normalizeBackendUrl(path) {
   return `${BACKEND_URL.replace(/\/$/, "")}/${path}`;
 }
 
-async function postBackend(path, payload) {
-  try {
-    await fetch(normalizeBackendUrl(path), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  } catch (error) {
+function postBackend(path, payload) {
+  fetch(normalizeBackendUrl(path), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    keepalive: true,
+  }).catch((error) => {
     console.warn(`[socket] Backend sync failed for ${path}:`, error instanceof Error ? error.message : error);
-  }
+  });
 }
 
 function clearRemovalTimer(entry) {
@@ -147,6 +146,56 @@ io.on("connection", (socket) => {
       reconnectGraceMs: RECONNECT_GRACE_MS,
     });
   });
+
+  // --- Session state broadcasting (replaces HTTP polling) ---
+
+  socket.on("session:state-change", (payload = {}) => {
+    const sessionId = socket.data.adminSessionId;
+    if (!sessionId) {
+      return;
+    }
+
+    socket.to(`session:${sessionId}`).emit("session:update", {
+      action: payload.action ?? null,
+      status: payload.status ?? null,
+      currentQuestionIndex: payload.currentQuestionIndex ?? null,
+      participants: payload.participants ?? null,
+      timeRemainingSeconds: payload.timeRemainingSeconds ?? null,
+      serverNow: payload.serverNow ?? null,
+      timestamp: Date.now(),
+    });
+  });
+
+  socket.on("student:answer-submitted", (payload = {}) => {
+    const sessionKey = socket.data.sessionKey;
+    if (!sessionKey) {
+      return;
+    }
+
+    const entry = activeUsers.get(sessionKey);
+    if (!entry) {
+      return;
+    }
+
+    socket.to(`session:${entry.sessionId}`).emit("session:answer-notify", {
+      participantId: payload.participantId ?? null,
+      questionId: payload.questionId ?? null,
+      timestamp: Date.now(),
+    });
+  });
+
+  socket.on("display:join", (payload = {}) => {
+    const sessionId = String(payload.sessionId ?? "").trim();
+    if (!sessionId) {
+      return;
+    }
+
+    socket.data.displaySessionId = sessionId;
+    socket.join(`session:${sessionId}`);
+    socket.emit("display:joined", { socketId: socket.id, sessionId });
+  });
+
+  // --- Disconnect handling ---
 
   socket.on("disconnect", () => {
     const adminSessionId = socket.data.adminSessionId;

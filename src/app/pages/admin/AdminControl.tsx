@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useParams } from "react-router";
 import { Play, Pause, Users, SkipForward, BarChart2, Award, ArrowRight, LayoutDashboard, QrCode as QrIcon, Eye, Clock3, CheckCircle2 } from "lucide-react";
 import { motion } from "motion/react";
@@ -37,6 +37,8 @@ export function AdminControl() {
     rightImageUrl?: string;
   }>>([]);
   const normalizedSessionId = id && /^\d+$/.test(id) ? id : null;
+  const [reloadTrigger, setReloadTrigger] = useState(0);
+  const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
     if (!normalizedSessionId) {
@@ -63,13 +65,13 @@ export function AdminControl() {
     void loadSession();
     const intervalId = window.setInterval(() => {
       void loadSession();
-    }, 3000);
+    }, 20000);
 
     return () => {
       isMounted = false;
       window.clearInterval(intervalId);
     };
-  }, [normalizedSessionId, setSession]);
+  }, [normalizedSessionId, setSession, reloadTrigger]);
 
   useEffect(() => {
     if (!normalizedSessionId) {
@@ -85,19 +87,29 @@ export function AdminControl() {
       reconnectionDelayMax: 5000,
       timeout: 10000,
     });
+    
+    socketRef.current = socket;
 
     const joinAsHost = () => {
       socket.emit("admin:join", { sessionId: normalizedSessionId });
     };
 
+    const handleAnswerNotify = () => {
+      setReloadTrigger((prev) => prev + 1);
+    };
+
     socket.on("connect", joinAsHost);
     socket.on("reconnect", joinAsHost);
+    socket.on("session:answer-notify", handleAnswerNotify);
+    
     joinAsHost();
 
     return () => {
       socket.off("connect", joinAsHost);
       socket.off("reconnect", joinAsHost);
+      socket.off("session:answer-notify", handleAnswerNotify);
       socket.disconnect();
+      socketRef.current = null;
     };
   }, [normalizedSessionId]);
 
@@ -226,6 +238,11 @@ export function AdminControl() {
     try {
       const session = await updateAdminSessionState(normalizedSessionId, action);
       setSession(session);
+      socketRef.current?.emit("session:state-change", {
+        action,
+        status: session.status,
+        currentQuestionIndex: session.currentQuestionIndex,
+      });
       toast.success(successMessage);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update session");

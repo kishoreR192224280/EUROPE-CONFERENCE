@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ArrowRight, MonitorPlay, Search, Users, Trophy, Award } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -7,6 +7,11 @@ import confetti from "canvas-confetti";
 import { useSession } from "../context/SessionContext";
 import { getPublicSession } from "../api/liveSessionApi";
 import { toast } from "sonner";
+import { io, type Socket } from "socket.io-client";
+
+function getSocketServerUrl() {
+  return import.meta.env.VITE_SOCKET_URL || "http://localhost:3001";
+}
 
 function getPrimaryLabelAnswer(label: { acceptedAnswers?: string[]; prompt: string; marker: number }) {
   return label.acceptedAnswers?.find((answer) => answer.trim())?.trim() || label.prompt || `Item ${label.marker}`;
@@ -145,12 +150,12 @@ export function BigScreenEntry() {
     </div>
   );
 }
-
 export function BigScreen() {
   const { code } = useParams();
   const { currentSession, setSession } = useSession();
   const [view, setView] = useState<"lobby" | "question" | "results" | "leaderboard" | "ended">("lobby");
   const [timeLeft, setTimeLeft] = useState(30);
+  const [reloadTrigger, setReloadTrigger] = useState(0);
   const [shuffledMatchingPairs, setShuffledMatchingPairs] = useState<Array<{
     id: string;
     leftText: string;
@@ -185,6 +190,48 @@ export function BigScreen() {
     setShuffledMatchingPairs(shuffleMatchingPairs(matchingPairs));
   }, [currentQuestion?.id]);
 
+  // --- WebSocket: join room and listen for state-change broadcasts ---
+  useEffect(() => {
+    if (!code || !currentSession?.id) {
+      return;
+    }
+
+    const socket: Socket = io(getSocketServerUrl(), {
+      transports: ["websocket"],
+      withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000,
+    });
+
+    const joinDisplay = () => {
+      socket.emit("display:join", { sessionId: String(currentSession.id) });
+    };
+
+    const handleUpdate = () => {
+      setReloadTrigger((prev) => prev + 1);
+    };
+
+    socket.on("connect", joinDisplay);
+    socket.on("reconnect", joinDisplay);
+    socket.on("session:update", handleUpdate);
+    socket.on("session:answer-notify", handleUpdate);
+    socket.on("host-paused", handleUpdate);
+    joinDisplay();
+
+    return () => {
+      socket.off("connect", joinDisplay);
+      socket.off("reconnect", joinDisplay);
+      socket.off("session:update", handleUpdate);
+      socket.off("session:answer-notify", handleUpdate);
+      socket.off("host-paused", handleUpdate);
+      socket.disconnect();
+    };
+  }, [code, currentSession?.id]);
+
+  // --- HTTP fallback polling (20s) ---
   useEffect(() => {
     if (!code) {
       return;
@@ -206,13 +253,13 @@ export function BigScreen() {
     void loadSession();
     const intervalId = window.setInterval(() => {
       void loadSession();
-    }, 3000);
+    }, 20000);
 
     return () => {
       isMounted = false;
       window.clearInterval(intervalId);
     };
-  }, [code, setSession]);
+  }, [code, setSession, reloadTrigger]);
 
   useEffect(() => {
     if (currentSession?.status === "active") {
@@ -252,51 +299,51 @@ export function BigScreen() {
   }, [view, currentSession?.currentQuestion, currentSession?.timeRemainingSeconds]);
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white overflow-hidden flex flex-col p-12 relative">
+    <div className="h-screen max-h-screen bg-[#0f172a] text-white overflow-hidden flex flex-col p-4 sm:p-6 lg:p-10 relative select-none">
       <div className="absolute inset-0 z-0 overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/20 blur-[120px] rounded-full animate-pulse"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-600/20 blur-[120px] rounded-full animate-pulse delay-1000"></div>
         <div className="absolute top-[20%] right-[10%] w-[30%] h-[30%] bg-purple-600/10 blur-[100px] rounded-full animate-bounce duration-[10s]"></div>
       </div>
 
-      <header className="relative z-10 flex items-center justify-between mb-16">
-        <div className="flex items-center gap-6">
-          <motion.div 
+      <header className="relative z-10 flex items-center justify-between gap-4 mb-6 sm:mb-8 lg:mb-10 shrink-0">
+        <div className="flex items-center gap-3 sm:gap-6 min-w-0">
+          <motion.div
             initial={{ rotate: -10, scale: 0.8 }}
             animate={{ rotate: 0, scale: 1 }}
-            className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-[2rem] flex items-center justify-center text-4xl font-black shadow-2xl shadow-indigo-500/20"
+            className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-[1.25rem] sm:rounded-[1.75rem] flex items-center justify-center text-2xl sm:text-3xl font-black shadow-2xl shadow-indigo-500/20 shrink-0"
           >
             Q
           </motion.div>
-          <div>
-            <h1 className="text-4xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 truncate">
               {currentSession?.title || "Live Quiz Session"}
             </h1>
-            <p className="text-indigo-400 font-black uppercase tracking-[0.2em] text-sm mt-1">Join on localhost with code</p>
+            <p className="text-indigo-400 font-black uppercase tracking-[0.2em] text-[9px] sm:text-xs mt-0.5">Join on session with code</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
-          <motion.div 
+        <div className="flex items-center gap-3 sm:gap-6 shrink-0">
+          <motion.div
             layout
-            className="bg-white/5 backdrop-blur-2xl px-12 py-6 rounded-[2.5rem] border border-white/10 flex flex-col items-center shadow-2xl"
+            className="bg-white/5 backdrop-blur-2xl px-5 py-2 sm:px-8 sm:py-3.5 rounded-[1.5rem] sm:rounded-[2rem] border border-white/10 flex flex-col items-center shadow-2xl"
           >
-            <span className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-1">Session Code</span>
-            <span className="text-7xl font-black text-white tracking-tighter">{code}</span>
+            <span className="text-[9px] sm:text-xs font-black text-indigo-400 uppercase tracking-widest mb-0.5">Session Code</span>
+            <span className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tighter">{code}</span>
           </motion.div>
-          <div className="flex items-center gap-6 bg-white/5 backdrop-blur-2xl px-10 py-6 rounded-[2.5rem] border border-white/10 shadow-2xl">
-            <div className="p-4 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-500/20">
-              <Users size={36} />
+          <div className="flex items-center gap-3 sm:gap-4 bg-white/5 backdrop-blur-2xl px-4 py-2 sm:px-6 sm:py-3.5 rounded-[1.5rem] sm:rounded-[2rem] border border-white/10 shadow-2xl">
+            <div className="p-2 sm:p-3 bg-indigo-600 rounded-xl shadow-xl shadow-indigo-500/20">
+              <Users size={20} className="sm:w-6 sm:h-6" />
             </div>
             <div>
-              <p className="text-5xl font-black text-white leading-none">{currentSession?.participants ?? 0}</p>
-              <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mt-1">Connected</p>
+              <p className="text-xl sm:text-2xl lg:text-3xl font-black text-white leading-none">{currentSession?.participants ?? 0}</p>
+              <p className="text-[9px] sm:text-xs font-black text-indigo-400 uppercase tracking-widest mt-0.5">Connected</p>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center w-full max-w-7xl mx-auto">
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center w-full max-w-7xl mx-auto min-h-0 overflow-y-auto pr-1">
         <AnimatePresence mode="wait">
           {view === "lobby" && (
             <motion.div
@@ -304,19 +351,19 @@ export function BigScreen() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="text-center space-y-16"
+              className="text-center space-y-8 sm:space-y-12"
             >
-              <div className="relative group">
-                <div className="absolute -inset-8 bg-gradient-to-r from-indigo-600 to-blue-600 rounded-[4rem] blur opacity-25 group-hover:opacity-40 transition duration-1000"></div>
-                <div className="relative bg-white p-12 sm:p-16 rounded-[3rem] shadow-[0_0_100px_rgba(79,70,229,0.3)]">
-                  <QRCodeSVG value={`${window.location.origin}/join/${code}`} size={350} />
+              <div className="relative group inline-block">
+                <div className="absolute -inset-4 bg-gradient-to-r from-indigo-600 to-blue-600 rounded-[2.5rem] blur opacity-25 group-hover:opacity-40 transition duration-1000"></div>
+                <div className="relative bg-white p-6 sm:p-8 rounded-[2rem] shadow-[0_0_100px_rgba(79,70,229,0.3)]">
+                  <QRCodeSVG value={`${window.location.origin}/join/${code}`} size={260} />
                 </div>
               </div>
-              <div className="space-y-6">
-                <h2 className="text-7xl font-black tracking-tight animate-pulse bg-clip-text text-transparent bg-gradient-to-b from-white to-gray-400">
+              <div className="space-y-4">
+                <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight animate-pulse bg-clip-text text-transparent bg-gradient-to-b from-white to-gray-400">
                   Waiting for players...
                 </h2>
-                <p className="text-3xl text-indigo-300/60 font-medium">Scan the QR code or enter the code manually to join!</p>
+                <p className="text-lg sm:text-xl lg:text-2xl text-indigo-300/60 font-medium">Scan the QR code or enter the code manually to join!</p>
               </div>
             </motion.div>
           )}
@@ -327,56 +374,56 @@ export function BigScreen() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, y: -20 }}
-              className="w-full space-y-16"
+              className="w-full space-y-6 sm:space-y-8"
             >
-              <div className="bg-white/5 backdrop-blur-3xl border border-white/10 px-16 pb-16 pt-10 rounded-[4rem] shadow-2xl relative overflow-hidden group">
+              <div className="bg-white/5 backdrop-blur-3xl border border-white/10 px-6 py-8 sm:px-12 sm:py-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
                 <div className="absolute top-0 left-0 w-2 h-full bg-indigo-600"></div>
-                <div className="mx-auto mb-8 flex h-28 w-28 flex-col items-center justify-center rounded-[2rem] bg-gradient-to-b from-indigo-500 to-indigo-700 text-5xl font-black shadow-[0_0_50px_rgba(79,70,229,0.35)] ring-4 ring-indigo-300/10 group-hover:scale-105 transition-transform">
+                <div className="mx-auto mb-4 flex h-16 w-16 sm:h-20 sm:w-20 flex-col items-center justify-center rounded-[1.25rem] bg-gradient-to-b from-indigo-500 to-indigo-700 text-3xl sm:text-4xl font-black shadow-[0_0_50px_rgba(79,70,229,0.35)] ring-4 ring-indigo-300/10 group-hover:scale-105 transition-transform">
                   <span className={timeLeft < 6 ? "text-red-300 animate-pulse" : "text-white"}>{timeLeft}</span>
-                  <span className="mt-1 text-[10px] uppercase tracking-[0.28em] leading-none text-indigo-100">Sec</span>
+                  <span className="mt-0.5 text-[8px] sm:text-[9px] uppercase tracking-[0.28em] leading-none text-indigo-100">Sec</span>
                 </div>
-                <h2 className="text-6xl font-black text-center leading-tight tracking-tight">
+                <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-center leading-tight tracking-tight">
                   {currentQuestion.text}
                 </h2>
                 {currentQuestion.instructions ? (
-                  <p className="mt-6 text-center text-xl font-semibold text-slate-300">
+                  <p className="mt-3 text-center text-sm sm:text-base font-semibold text-slate-300">
                     {currentQuestion.instructions}
                   </p>
                 ) : null}
               </div>
 
               {currentQuestion.questionType === "sorting" ? (
-                <div className="space-y-6">
+                <div className="space-y-3 sm:space-y-4">
                   {(currentQuestion.items ?? []).map((item, i) => (
                     <motion.div
                       key={`${item}-${i}`}
                       initial={{ opacity: 0, y: 30 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.15 + i * 0.08 }}
-                      className="flex items-center gap-8 rounded-[3rem] border-2 border-white/5 bg-white/5 p-8 backdrop-blur-xl"
+                      className="flex items-center gap-4 rounded-[1.5rem] border-2 border-white/5 bg-white/5 p-4 backdrop-blur-xl"
                     >
-                      <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-emerald-500 text-4xl font-black shadow-xl">
+                      <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-xl bg-emerald-500 text-xl sm:text-2xl font-black shadow-xl shrink-0">
                         {i + 1}
                       </div>
-                      <span className="text-4xl font-bold tracking-tight text-gray-100">{item}</span>
+                      <span className="text-lg sm:text-xl lg:text-2xl font-bold tracking-tight text-gray-100 min-w-0 break-words">{item}</span>
                     </motion.div>
                   ))}
                 </div>
               ) : currentQuestion.questionType === "label_image" ? (
-                <div className="grid items-start gap-10 lg:grid-cols-[1.15fr_0.85fr]">
-                  <div className="rounded-[3rem] border border-white/10 bg-white/5 p-8 backdrop-blur-xl">
+                <div className="grid items-start gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+                  <div className="rounded-[1.75rem] border border-white/10 bg-white/5 p-4 sm:p-6 backdrop-blur-xl">
                     <div className="mb-4 flex items-center justify-between gap-3">
-                      <p className="text-sm font-black uppercase tracking-[0.22em] text-blue-300">Image Reference</p>
-                      <p className="text-sm font-semibold text-slate-400">{labelItems.length} markers to label</p>
+                      <p className="text-xs sm:text-sm font-black uppercase tracking-[0.22em] text-blue-300">Image Reference</p>
+                      <p className="text-xs sm:text-sm font-semibold text-slate-400">{labelItems.length} markers to label</p>
                     </div>
-                    <div className="relative mx-auto aspect-[4/3] max-w-3xl overflow-hidden rounded-[2rem] bg-white">
+                    <div className="relative mx-auto aspect-[4/3] max-w-2xl max-h-[40vh] overflow-hidden rounded-[1.5rem] bg-white">
                       {currentQuestion.mediaUrl ? (
                         <img src={currentQuestion.mediaUrl} alt="Question reference" className="h-full w-full object-contain" />
                       ) : null}
                       {labelItems.map((label) => (
                         <div
                           key={label.id}
-                          className="absolute flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-[#0f172a] bg-blue-500 text-2xl font-black text-white shadow-2xl"
+                          className="absolute flex h-8 w-8 sm:h-10 sm:w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#0f172a] bg-blue-500 text-xs sm:text-sm font-black text-white shadow-2xl"
                           style={{ left: `${label.x}%`, top: `${label.y}%` }}
                         >
                           {label.marker}
@@ -385,16 +432,16 @@ export function BigScreen() {
                     </div>
                   </div>
 
-                  <div className="space-y-5">
+                  <div className="space-y-3">
                     {labelItems.map((label) => (
-                      <div key={label.id} className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-                        <div className="flex items-center gap-4">
-                          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-2xl font-black text-white shadow-xl">
+                      <div key={label.id} className="rounded-[1.25rem] border border-white/10 bg-white/5 p-3.5 sm:p-4 backdrop-blur-xl">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white shadow-xl">
                             {label.marker}
                           </div>
                           <div>
-                            <p className="text-sm font-black uppercase tracking-[0.22em] text-blue-300">Item {label.marker}</p>
-                            <p className="mt-1 text-2xl font-bold tracking-tight text-white">Add the correct label here</p>
+                            <p className="text-[10px] sm:text-xs font-black uppercase tracking-[0.22em] text-blue-300">Item {label.marker}</p>
+                            <p className="mt-0.5 text-sm sm:text-base lg:text-lg font-bold tracking-tight text-white">Add label on your phone</p>
                           </div>
                         </div>
                       </div>
@@ -402,58 +449,58 @@ export function BigScreen() {
                   </div>
                 </div>
               ) : currentQuestion.questionType === "matching" ? (
-                <div className="rounded-[3rem] border border-white/10 bg-white/5 p-8 backdrop-blur-xl">
-                  <div className="mb-6 grid gap-6 lg:grid-cols-2">
-                    <div className="rounded-[2rem] border border-white/10 bg-white/5 px-8 py-5">
-                      <p className="text-sm font-black uppercase tracking-[0.22em] text-blue-300">Options</p>
+                <div className="rounded-[1.75rem] border border-white/10 bg-white/5 p-4 sm:p-6 backdrop-blur-xl">
+                  <div className="mb-4 grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-[1.25rem] border border-white/10 bg-white/5 px-6 py-3">
+                      <p className="text-xs sm:text-sm font-black uppercase tracking-[0.22em] text-blue-300">Options</p>
                     </div>
-                    <div className="rounded-[2rem] border border-white/10 bg-white/5 px-8 py-5">
-                      <p className="text-sm font-black uppercase tracking-[0.22em] text-violet-300">Match Bank</p>
+                    <div className="rounded-[1.25rem] border border-white/10 bg-white/5 px-6 py-3">
+                      <p className="text-xs sm:text-sm font-black uppercase tracking-[0.22em] text-violet-300">Match Bank</p>
                     </div>
                   </div>
 
-                  <div className="space-y-5">
+                  <div className="space-y-3">
                     {matchingPairs.map((pair, index) => {
                       const matchBankItem = shuffledMatchingPairs[index] ?? pair;
 
                       return (
-                        <div key={pair.id} className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
-                          <div className="rounded-[2rem] border border-white/10 bg-white/5 p-5">
-                            <div className="flex h-full items-start gap-4">
-                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-600 text-2xl font-black text-white shadow-xl">
+                        <div key={pair.id} className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
+                          <div className="rounded-[1.25rem] border border-white/10 bg-white/5 p-3.5 sm:p-4">
+                            <div className="flex h-full items-start gap-3">
+                              <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white shadow-xl">
                                 {index + 1}
                               </div>
-                              <div className="flex min-h-[184px] min-w-0 flex-1 flex-col justify-center space-y-3">
+                              <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center space-y-2">
                                 {pair.leftImageUrl ? (
-                                  <div className="overflow-hidden rounded-2xl bg-white/95">
-                                    <img src={pair.leftImageUrl} alt={pair.leftText} className="h-36 w-full object-contain" />
+                                  <div className="overflow-hidden rounded-xl bg-white/95 max-h-20 sm:max-h-28">
+                                    <img src={pair.leftImageUrl} alt={pair.leftText} className="h-full w-full object-contain" />
                                   </div>
                                 ) : null}
                                 {pair.leftText ? (
-                                  <p className="text-3xl font-black tracking-tight text-white">{pair.leftText}</p>
+                                  <p className="text-base sm:text-lg lg:text-xl font-black tracking-tight text-white leading-tight">{pair.leftText}</p>
                                 ) : (
-                                  <p className="text-xl font-semibold text-slate-300">Image prompt</p>
+                                  <p className="text-sm font-semibold text-slate-300">Image prompt</p>
                                 )}
                               </div>
                             </div>
                           </div>
 
-                          <div className="rounded-[2rem] border border-white/10 bg-white/5 p-5">
-                            <div className="flex h-full items-start gap-4">
-                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-violet-600 text-2xl font-black text-white shadow-xl">
+                          <div className="rounded-[1.25rem] border border-white/10 bg-white/5 p-3.5 sm:p-4">
+                            <div className="flex h-full items-start gap-3">
+                              <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm font-black text-white shadow-xl">
                                 {String.fromCharCode(65 + index)}
                               </div>
-                              <div className="flex min-h-[184px] min-w-0 flex-1 flex-col justify-center space-y-3">
+                              <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center space-y-2">
                                 {matchBankItem.rightImageUrl ? (
-                                  <div className="overflow-hidden rounded-2xl bg-white/95">
+                                  <div className="overflow-hidden rounded-xl bg-white/95 max-h-20 sm:max-h-28">
                                     <img
                                       src={matchBankItem.rightImageUrl}
                                       alt={matchBankItem.rightText}
-                                      className="h-36 w-full object-contain"
+                                      className="h-full w-full object-contain"
                                     />
                                   </div>
                                 ) : null}
-                                <p className="text-3xl font-black tracking-tight text-white">
+                                <p className="text-base sm:text-lg lg:text-xl font-black tracking-tight text-white leading-tight">
                                   {matchBankItem.rightText || "Image option"}
                                 </p>
                               </div>
@@ -465,21 +512,20 @@ export function BigScreen() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-10">
+                <div className="grid grid-cols-2 gap-4 sm:gap-6">
                   {currentQuestion.options.map((opt, i) => (
                     <motion.div
                       key={i}
                       initial={{ opacity: 0, y: 30 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.2 + i * 0.1 }}
-                      className="relative flex items-center gap-10 overflow-hidden rounded-[3rem] border-2 border-white/5 bg-white/5 p-10 backdrop-blur-xl"
+                      className="relative flex items-center gap-4 sm:gap-6 overflow-hidden rounded-[1.5rem] border-2 border-white/5 bg-white/5 p-4 sm:p-6 lg:p-8 backdrop-blur-xl"
                     >
-                      <div className={`flex h-20 w-20 items-center justify-center rounded-2xl text-4xl font-black shadow-xl ${
-                        i === 0 ? "bg-amber-500" : i === 1 ? "bg-blue-500" : i === 2 ? "bg-emerald-500" : "bg-purple-500"
-                      }`}>
+                      <div className={`flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-xl text-xl sm:text-2xl font-black shadow-xl shrink-0 ${i === 0 ? "bg-amber-500" : i === 1 ? "bg-blue-500" : i === 2 ? "bg-emerald-500" : "bg-purple-500"
+                        }`}>
                         {String.fromCharCode(65 + i)}
                       </div>
-                      <span className="text-4xl font-bold tracking-tight text-gray-100">{opt}</span>
+                      <span className="text-base sm:text-xl lg:text-2xl font-bold tracking-tight text-gray-100 min-w-0 break-words">{opt}</span>
                     </motion.div>
                   ))}
                 </div>
@@ -492,45 +538,45 @@ export function BigScreen() {
               key="results"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="w-full space-y-16"
+              className="w-full space-y-6 sm:space-y-8"
             >
-              <div className="text-center space-y-4">
-                <h2 className="text-6xl font-black tracking-tight">Results reveal!</h2>
-                <p className="text-2xl text-indigo-400 font-bold uppercase tracking-widest">How did everyone do?</p>
+              <div className="text-center space-y-2">
+                <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight">Results reveal!</h2>
+                <p className="text-sm sm:text-lg text-indigo-400 font-bold uppercase tracking-widest">How did everyone do?</p>
               </div>
 
               {currentQuestion.questionType === "sorting" ? (
-                <div className="space-y-6">
+                <div className="space-y-3 sm:space-y-4">
                   {(currentQuestion.correctOrder ?? currentQuestion.items ?? []).map((item, i) => (
                     <motion.div
                       key={`${item}-${i}`}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.08 }}
-                      className="flex items-center gap-8 rounded-[3rem] border-2 border-emerald-400/30 bg-emerald-500/10 p-8"
+                      className="flex items-center gap-4 rounded-[1.5rem] border-2 border-emerald-400/30 bg-emerald-500/10 p-4"
                     >
-                      <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-emerald-500 text-4xl font-black text-white">
+                      <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-xl bg-emerald-500 text-xl sm:text-2xl font-black text-white shrink-0">
                         {i + 1}
                       </div>
-                      <span className="text-4xl font-bold tracking-tight text-white">{item}</span>
+                      <span className="text-lg sm:text-xl lg:text-2xl font-bold tracking-tight text-white min-w-0 break-words">{item}</span>
                     </motion.div>
                   ))}
                 </div>
               ) : currentQuestion.questionType === "label_image" ? (
-                <div className="grid items-start gap-10 lg:grid-cols-[1.1fr_0.9fr]">
-                  <div className="rounded-[3rem] border border-white/10 bg-white/5 p-8">
+                <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+                  <div className="rounded-[1.75rem] border border-white/10 bg-white/5 p-4 sm:p-6">
                     <div className="mb-4 flex items-center justify-between gap-3">
-                      <p className="text-sm font-black uppercase tracking-[0.22em] text-emerald-300">Answer Key</p>
-                      <p className="text-sm font-semibold text-slate-400">{labelItems.length} labeled markers</p>
+                      <p className="text-xs sm:text-sm font-black uppercase tracking-[0.22em] text-emerald-300">Answer Key</p>
+                      <p className="text-xs sm:text-sm font-semibold text-slate-400">{labelItems.length} labeled markers</p>
                     </div>
-                    <div className="relative mx-auto aspect-[4/3] max-w-3xl overflow-hidden rounded-[2rem] bg-white">
+                    <div className="relative mx-auto aspect-[4/3] max-w-2xl max-h-[40vh] overflow-hidden rounded-[1.5rem] bg-white">
                       {currentQuestion.mediaUrl ? (
                         <img src={currentQuestion.mediaUrl} alt="Diagram answer key" className="h-full w-full object-contain" />
                       ) : null}
                       {labelItems.map((label) => (
                         <div
                           key={label.id}
-                          className="absolute flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-[#0f172a] bg-emerald-500 text-2xl font-black text-white shadow-2xl"
+                          className="absolute flex h-8 w-8 sm:h-10 sm:w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#0f172a] bg-emerald-500 text-xs sm:text-sm font-black text-white shadow-2xl"
                           style={{ left: `${label.x}%`, top: `${label.y}%` }}
                         >
                           {label.marker}
@@ -538,18 +584,18 @@ export function BigScreen() {
                       ))}
                     </div>
                   </div>
-                  <div className="space-y-5">
+                  <div className="space-y-3">
                     {labelItems.map((label) => (
-                      <div key={label.id} className="rounded-[2rem] border border-emerald-400/20 bg-emerald-500/10 p-6">
-                        <div className="flex items-start gap-4">
-                          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-2xl font-black text-white shadow-xl">
+                      <div key={label.id} className="rounded-[1.25rem] border border-emerald-400/20 bg-emerald-500/10 p-3.5 sm:p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-sm font-black text-white shadow-xl">
                             {label.marker}
                           </div>
-                          <div className="space-y-2">
-                            <p className="text-sm font-black uppercase tracking-[0.22em] text-emerald-300">Item {label.marker}</p>
-                            <p className="text-3xl font-black text-white">{getPrimaryLabelAnswer(label)}</p>
+                          <div className="space-y-1 min-w-0">
+                            <p className="text-[10px] sm:text-xs font-black uppercase tracking-[0.22em] text-emerald-300">Item {label.marker}</p>
+                            <p className="text-base sm:text-xl lg:text-2xl font-black text-white break-words">{getPrimaryLabelAnswer(label)}</p>
                             {label.acceptedAnswers && label.acceptedAnswers.length > 1 ? (
-                              <p className="text-sm font-semibold text-slate-300">
+                              <p className="text-xs font-semibold text-slate-300 truncate">
                                 Also accepted: {label.acceptedAnswers.slice(1).join(", ")}
                               </p>
                             ) : null}
@@ -560,44 +606,44 @@ export function BigScreen() {
                   </div>
                 </div>
               ) : currentQuestion.questionType === "matching" ? (
-                <div className="space-y-6">
+                <div className="space-y-3">
                   {matchingPairs.map((pair, index) => (
                     <motion.div
                       key={pair.id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.08 }}
-                      className="rounded-[3rem] border border-emerald-400/20 bg-emerald-500/10 p-6"
+                      className="rounded-[1.5rem] border border-emerald-400/20 bg-emerald-500/10 p-4"
                     >
-                      <div className="grid gap-6 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-4">
-                            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-2xl font-black text-white shadow-xl">
+                      <div className="grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+                        <div className="space-y-2 min-w-0">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white shadow-xl">
                               {index + 1}
                             </div>
-                            <p className="text-3xl font-black tracking-tight text-white">{pair.leftText}</p>
+                            <p className="text-lg sm:text-xl lg:text-2xl font-black tracking-tight text-white truncate">{pair.leftText}</p>
                           </div>
                           {pair.leftImageUrl ? (
-                            <div className="overflow-hidden rounded-2xl bg-white/95">
-                              <img src={pair.leftImageUrl} alt={pair.leftText} className="h-36 w-full object-contain" />
+                            <div className="overflow-hidden rounded-xl bg-white/95 max-h-20 sm:max-h-28">
+                              <img src={pair.leftImageUrl} alt={pair.leftText} className="h-full w-full object-contain" />
                             </div>
                           ) : null}
                         </div>
 
-                        <div className="mx-auto rounded-full bg-emerald-500 px-4 py-2 text-sm font-black uppercase tracking-[0.18em] text-[#0f172a]">
+                        <div className="mx-auto rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[#0f172a] shrink-0">
                           Correct Match
                         </div>
 
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-4">
-                            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-violet-600 text-2xl font-black text-white shadow-xl">
+                        <div className="space-y-2 min-w-0">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm font-black text-white shadow-xl">
                               {String.fromCharCode(65 + index)}
                             </div>
-                            <p className="text-3xl font-black tracking-tight text-white">{pair.rightText}</p>
+                            <p className="text-lg sm:text-xl lg:text-2xl font-black tracking-tight text-white truncate">{pair.rightText}</p>
                           </div>
                           {pair.rightImageUrl ? (
-                            <div className="overflow-hidden rounded-2xl bg-white/95">
-                              <img src={pair.rightImageUrl} alt={pair.rightText} className="h-36 w-full object-contain" />
+                            <div className="overflow-hidden rounded-xl bg-white/95 max-h-20 sm:max-h-28">
+                              <img src={pair.rightImageUrl} alt={pair.rightText} className="h-full w-full object-contain" />
                             </div>
                           ) : null}
                         </div>
@@ -606,7 +652,7 @@ export function BigScreen() {
                   ))}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-10">
+                <div className="grid grid-cols-2 gap-4 sm:gap-6">
                   {currentQuestion.options.map((opt, i) => {
                     const isCorrect = i === currentQuestion.correctAnswer;
                     return (
@@ -615,28 +661,26 @@ export function BigScreen() {
                         initial={{ opacity: 0 }}
                         animate={{
                           opacity: 1,
-                          scale: isCorrect ? 1.05 : 0.95,
+                          scale: isCorrect ? 1.02 : 0.98,
                           borderColor: isCorrect ? "rgba(16, 185, 129, 0.5)" : "rgba(255, 255, 255, 0.05)",
                         }}
-                        className={`flex items-center justify-between rounded-[3rem] border-4 p-10 transition-all ${
-                          isCorrect ? "bg-emerald-500/20 shadow-[0_0_80px_rgba(16,185,129,0.2)]" : "bg-white/5 opacity-50"
-                        }`}
+                        className={`flex items-center justify-between rounded-[1.5rem] border-2 p-4 sm:p-6 transition-all ${isCorrect ? "bg-emerald-500/20 shadow-[0_0_80px_rgba(16,185,129,0.2)]" : "bg-white/5 opacity-50"
+                          }`}
                       >
-                        <div className="flex items-center gap-10">
-                          <div className={`flex h-20 w-20 items-center justify-center rounded-2xl text-4xl font-black ${
-                            isCorrect ? "bg-emerald-500 text-white" : "bg-gray-700 text-gray-400"
-                          }`}>
+                        <div className="flex items-center gap-4 sm:gap-6 min-w-0">
+                          <div className={`flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-xl text-xl sm:text-2xl font-black shrink-0 ${isCorrect ? "bg-emerald-500 text-white" : "bg-gray-700 text-gray-400"
+                            }`}>
                             {String.fromCharCode(65 + i)}
                           </div>
-                          <span className="text-4xl font-bold tracking-tight">{opt}</span>
+                          <span className="text-base sm:text-xl lg:text-2xl font-bold tracking-tight min-w-0 break-words">{opt}</span>
                         </div>
                         {isCorrect ? (
                           <motion.div
                             initial={{ scale: 0 }}
                             animate={{ scale: 1 }}
-                            className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 shadow-lg"
+                            className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 shadow-lg shrink-0"
                           >
-                            <svg className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" />
                             </svg>
                           </motion.div>
@@ -654,68 +698,66 @@ export function BigScreen() {
               key="leaderboard"
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
-              className="w-full max-w-5xl space-y-12"
+              className="w-full max-w-5xl space-y-6 sm:space-y-8"
             >
-              <div className="text-center space-y-6 mb-16">
+              <div className="text-center space-y-3 mb-6 sm:mb-8">
                 <motion.div
-                  animate={{ y: [0, -20, 0] }}
+                  animate={{ y: [0, -10, 0] }}
                   transition={{ repeat: Infinity, duration: 3 }}
                 >
-                  <Trophy className="w-24 h-24 text-amber-400 mx-auto drop-shadow-[0_0_30px_rgba(251,191,36,0.5)]" />
+                  <Trophy className="w-14 h-14 sm:w-18 sm:h-18 text-amber-400 mx-auto drop-shadow-[0_0_30px_rgba(251,191,36,0.5)]" />
                 </motion.div>
-                <h2 className="text-7xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-gray-500">
+                <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-gray-500">
                   Current Standings
                 </h2>
               </div>
-              
-              <div className="space-y-6">
+
+              <div className="space-y-3 sm:space-y-4">
                 {leaderboard.length === 0 ? (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.96 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="rounded-[2.5rem] border border-dashed border-white/10 bg-white/5 px-10 py-16 text-center"
+                    className="rounded-[2rem] border border-dashed border-white/10 bg-white/5 px-10 py-12 text-center"
                   >
-                    <Trophy className="mx-auto h-16 w-16 text-amber-400/70" />
-                    <h3 className="mt-6 text-3xl font-black tracking-tight">Leaderboard is warming up</h3>
-                    <p className="mt-3 text-xl text-slate-400">
+                    <Trophy className="mx-auto h-12 w-12 text-amber-400/70" />
+                    <h3 className="mt-4 text-2xl font-black tracking-tight">Leaderboard is warming up</h3>
+                    <p className="mt-2 text-base text-slate-400">
                       Standings will appear here as soon as player scores are available.
                     </p>
                   </motion.div>
                 ) : (
-                  leaderboard.map((item, i) => (
+                  leaderboard.slice(0, 5).map((item, i) => (
                     <motion.div
                       key={item.id}
                       initial={{ opacity: 0, x: -50 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.15 }}
-                      className={`relative flex items-center justify-between rounded-[2.5rem] border-2 p-8 transition-all ${
-                        i === 0 ? "scale-105 border-amber-500/50 bg-gradient-to-r from-amber-500/20 to-transparent shadow-2xl" :
-                        i === 1 ? "scale-[1.02] border-slate-400/30 bg-gradient-to-r from-slate-400/20 to-transparent" :
-                        i === 2 ? "scale-[1.01] border-amber-700/30 bg-gradient-to-r from-amber-700/20 to-transparent" :
-                        "border-white/5 bg-white/5"
-                      }`}
+                      transition={{ delay: i * 0.1 }}
+                      className={`relative flex items-center justify-between rounded-[1.75rem] border-2 p-4 lg:p-5 transition-all ${i === 0 ? "scale-[1.02] border-amber-500/50 bg-gradient-to-r from-amber-500/20 to-transparent shadow-2xl" :
+                          i === 1 ? "scale-[1.01] border-slate-400/30 bg-gradient-to-r from-slate-400/20 to-transparent" :
+                            i === 2 ? "scale-[1.005] border-amber-700/30 bg-gradient-to-r from-amber-700/20 to-transparent" :
+                              "border-white/5 bg-white/5"
+                        }`}
                     >
-                      <div className="flex items-center gap-10">
-                        <span className={`flex h-16 w-16 items-center justify-center rounded-[1.5rem] text-3xl font-black shadow-lg ${
-                          i === 0 ? "bg-gradient-to-br from-amber-400 to-amber-600 text-[#0f172a]" : 
-                          i === 1 ? "bg-gradient-to-br from-slate-300 to-slate-500 text-[#0f172a]" :
-                          i === 2 ? "bg-gradient-to-br from-amber-600 to-amber-800 text-white" : "bg-white/10 text-white"
-                        }`}>
+                      <div className="flex items-center gap-4 sm:gap-8 min-w-0">
+                        <span className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl text-lg sm:text-xl font-black shadow-lg shrink-0 ${i === 0 ? "bg-gradient-to-br from-amber-400 to-amber-600 text-[#0f172a]" :
+                            i === 1 ? "bg-gradient-to-br from-slate-300 to-slate-500 text-[#0f172a]" :
+                              i === 2 ? "bg-gradient-to-br from-amber-600 to-amber-800 text-white" : "bg-white/10 text-white"
+                          }`}>
                           {item.rank}
                         </span>
-                        <div className="flex h-16 w-16 items-center justify-center rounded-full border-4 border-[#0f172a] bg-indigo-500 text-2xl font-black shadow-xl">
+                        <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-full border-2 border-[#0f172a] bg-indigo-500 text-sm sm:text-base font-black shadow-xl">
                           {getInitials(item.name)}
                         </div>
-                        <div className="space-y-1">
-                          <span className="block text-4xl font-black tracking-tight">{item.name}</span>
-                          <span className="block text-sm font-black uppercase tracking-[0.24em] text-slate-500">
+                        <div className="space-y-0.5 min-w-0">
+                          <span className="block text-xl sm:text-2xl font-black tracking-tight text-white truncate">{item.name}</span>
+                          <span className="block text-[10px] sm:text-xs font-black uppercase tracking-[0.24em] text-slate-500 truncate">
                             {item.phoneNumber ?? "Participant"}
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-baseline gap-3">
-                        <span className="text-5xl font-black tracking-tighter text-indigo-400">{item.score}</span>
-                        <span className="text-sm font-black uppercase tracking-widest text-gray-500">PTS</span>
+                      <div className="flex items-baseline gap-2 shrink-0">
+                        <span className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tighter text-indigo-400">{item.score}</span>
+                        <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-500">PTS</span>
                       </div>
                     </motion.div>
                   ))
@@ -729,17 +771,17 @@ export function BigScreen() {
               key="ended"
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="text-center space-y-12"
+              className="text-center space-y-6 sm:space-y-8"
             >
-              <div className="w-48 h-48 bg-emerald-500/20 rounded-[3rem] border-4 border-emerald-500 flex items-center justify-center mx-auto shadow-[0_0_100px_rgba(16,185,129,0.3)]">
-                <Award className="w-24 h-24 text-emerald-500" />
+              <div className="w-24 h-24 sm:w-32 sm:h-32 bg-emerald-500/20 rounded-[2rem] sm:rounded-[2.5rem] border-2 border-emerald-500 flex items-center justify-center mx-auto shadow-[0_0_100px_rgba(16,185,129,0.3)]">
+                <Award className="w-12 h-12 sm:w-16 sm:h-16 text-emerald-500" />
               </div>
-              <div className="space-y-6">
-                <h2 className="text-8xl font-black tracking-tighter">Congratulations!</h2>
-                <p className="text-3xl text-gray-400 max-w-2xl mx-auto">The session has ended. Thank you everyone for participating in this interactive experience!</p>
+              <div className="space-y-4">
+                <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tighter">Congratulations!</h2>
+                <p className="text-base sm:text-xl text-gray-400 max-w-xl mx-auto">The session has ended. Thank you everyone for participating in this interactive experience!</p>
               </div>
-              <div className="pt-12">
-                <div className="inline-block px-12 py-6 bg-white/5 backdrop-blur-xl rounded-[2.5rem] border border-white/10 text-xl font-black text-indigo-400 uppercase tracking-[0.3em]">
+              <div className="pt-6">
+                <div className="inline-block px-6 py-3 sm:px-8 sm:py-4 bg-white/5 backdrop-blur-xl rounded-[1.5rem] sm:rounded-[2rem] border border-white/10 text-base sm:text-lg font-black text-indigo-400 uppercase tracking-[0.3em]">
                   Final Results coming soon
                 </div>
               </div>
@@ -748,12 +790,12 @@ export function BigScreen() {
         </AnimatePresence>
       </main>
 
-      <footer className="relative z-10 flex items-center justify-between pt-16 border-t border-white/5 mt-auto">
-        <div className="flex gap-6">
-          <div className="px-8 py-4 bg-white/5 rounded-2xl border border-white/10 text-xs font-black uppercase tracking-[0.2em] text-gray-400">
+      <footer className="relative z-10 flex items-center justify-between pt-6 border-t border-white/5 mt-auto shrink-0">
+        <div className="flex gap-4">
+          <div className="px-4 py-2 bg-white/5 rounded-xl border border-white/10 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
             {currentSession?.questionCount || currentSession?.questions.length || 0} ROUNDS TOTAL
           </div>
-          <div className="px-8 py-4 bg-indigo-600/10 rounded-2xl border border-indigo-600/20 text-xs font-black uppercase tracking-[0.2em] text-indigo-400">
+          <div className="px-4 py-2 bg-indigo-600/10 rounded-xl border border-indigo-600/20 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">
             FASTEST ANSWER WINS
           </div>
         </div>

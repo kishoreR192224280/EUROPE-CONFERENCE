@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Award, CheckCircle2, Search, Timer, WifiOff, XCircle } from "lucide-react";
+import { Award, CheckCircle2, ChevronDown, ChevronUp, Search, Timer, WifiOff, XCircle } from "lucide-react";
 import { motion } from "motion/react";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
@@ -61,11 +61,19 @@ function SortableSortingRow({
   index,
   hasSubmitted,
   onMove,
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast,
 }: {
   item: string;
   index: number;
   hasSubmitted: boolean;
   onMove: (fromIndex: number, toIndex: number) => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  isFirst: boolean;
+  isLast: boolean;
 }) {
   const [{ isDragging }, dragRef] = useDrag(
     () => ({
@@ -99,15 +107,43 @@ function SortableSortingRow({
       ref={(node) => {
         dragRef(dropRef(node));
       }}
-      className={`flex items-center gap-3 rounded-2xl border-2 border-gray-100 bg-white p-4 transition-all ${
+      className={`flex items-center gap-3 rounded-2xl border-2 border-gray-100 bg-white p-3.5 sm:p-4 transition-all ${
         isDragging ? "scale-[0.99] opacity-60 shadow-lg" : ""
       } ${hasSubmitted ? "" : "cursor-grab active:cursor-grabbing"}`}
     >
-      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-sm font-black text-white">
+      <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs sm:text-sm font-black text-white">
         {index + 1}
       </div>
-      <div className="flex-1 font-bold text-gray-800">{item}</div>
-      <div className="rounded-xl bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-600">
+      <div className="flex-1 font-bold text-gray-800 text-sm sm:text-base min-w-0 break-words">{item}</div>
+      {!hasSubmitted && (
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            disabled={isFirst}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveUp?.();
+            }}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-500 transition hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-gray-50"
+            aria-label="Move Up"
+          >
+            <ChevronUp size={16} />
+          </button>
+          <button
+            type="button"
+            disabled={isLast}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMoveDown?.();
+            }}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-500 transition hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-gray-50"
+            aria-label="Move Down"
+          >
+            <ChevronDown size={16} />
+          </button>
+        </div>
+      )}
+      <div className="hidden sm:block rounded-xl bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-600 shrink-0">
         Drag
       </div>
     </div>
@@ -133,6 +169,7 @@ export function StudentQuestion() {
   const [isFinished, setIsFinished] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAccessRevoked, setIsAccessRevoked] = useState(false);
+  const [reloadTrigger, setReloadTrigger] = useState(0);
 
   const participantJson = code ? sessionStorage.getItem(participantStorageKey(code)) : null;
   const participant = useMemo(() => parseParticipantRecord(participantJson), [participantJson]);
@@ -176,6 +213,7 @@ export function StudentQuestion() {
     enabled: Boolean(code && participant && currentSession?.id !== undefined && currentSession?.id !== null),
     onForceLogout: revokeParticipantAccess,
     onConnectionExpired: expireConnection,
+    onSessionUpdate: () => setReloadTrigger((prev) => prev + 1),
   });
 
   const currentQuestion = currentSession?.currentQuestion ?? null;
@@ -325,6 +363,14 @@ export function StudentQuestion() {
       setHasSubmitted(markAsSubmitted && !recordedAsTimeout);
       setHasRecordedTimeout(!markAsSubmitted || recordedAsTimeout);
       setIsFinished(true);
+      
+      if (!recordedAsTimeout && markAsSubmitted) {
+        participantSocket.emit("student:answer-submitted", {
+          participantId: parsedParticipant.id,
+          questionId: currentQuestion.id,
+        });
+      }
+
       if (recordedAsTimeout) {
         toast.error("Time expired before your answer reached the server. This question was recorded as unanswered.");
       }
@@ -396,13 +442,13 @@ export function StudentQuestion() {
     void loadSession();
     const pollId = window.setInterval(() => {
       void loadSession();
-    }, 3000);
+    }, 20000);
 
     return () => {
       isMounted = false;
       window.clearInterval(pollId);
     };
-  }, [code, navigate, setSession]);
+  }, [code, navigate, setSession, reloadTrigger]);
 
   useEffect(() => {
     hydrateLocalQuestionState();
@@ -608,9 +654,9 @@ export function StudentQuestion() {
     if (currentQuestion.questionType === "sorting") {
       return (
         <DndProvider backend={HTML5Backend}>
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-              Press, hold, and drag each step to arrange the correct clinical order.
+          <div className="space-y-3 sm:space-y-4">
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-xs sm:text-sm font-semibold text-emerald-700 leading-normal">
+              Press buttons or drag each step to arrange the correct order.
             </div>
             {(sortingItems ?? []).map((item, index) => (
               <SortableSortingRow
@@ -619,6 +665,10 @@ export function StudentQuestion() {
                 index={index}
                 hasSubmitted={hasSubmitted}
                 onMove={moveSortingItemByDrag}
+                onMoveUp={() => moveSortingItemByDrag(index, index - 1)}
+                onMoveDown={() => moveSortingItemByDrag(index, index + 1)}
+                isFirst={index === 0}
+                isLast={index === (sortingItems?.length ?? 0) - 1}
               />
             ))}
           </div>
@@ -632,15 +682,15 @@ export function StudentQuestion() {
       const filledLabelsCount = labels.filter((label) => (labelAnswers[label.id] ?? "").trim()).length;
 
       return (
-        <div className="space-y-5">
-          <div className="overflow-hidden rounded-[2rem] border border-gray-100 bg-gray-50 p-4">
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-[2rem] border border-gray-100 bg-gray-50 p-3 sm:p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-black uppercase tracking-[0.18em] text-blue-600">Image Reference</p>
-                <p className="text-xs font-semibold text-gray-500">Tap any numbered marker to answer that label.</p>
+                <p className="text-xs sm:text-sm font-black uppercase tracking-[0.18em] text-blue-600">Image Reference</p>
+                <p className="text-[10px] sm:text-xs font-semibold text-gray-500">Tap numbered marker to label.</p>
               </div>
-              <div className="rounded-full bg-white px-3 py-1.5 text-xs font-black uppercase tracking-[0.16em] text-blue-700 shadow-sm">
-                {filledLabelsCount}/{labels.length} answered
+              <div className="rounded-full bg-white px-2.5 py-1 text-[10px] sm:text-xs font-black uppercase tracking-[0.16em] text-blue-700 shadow-sm shrink-0">
+                {filledLabelsCount}/{labels.length} filled
               </div>
             </div>
             <div className="relative mx-auto aspect-[4/3] max-w-xl overflow-hidden rounded-[1.5rem] bg-white">
@@ -654,11 +704,10 @@ export function StudentQuestion() {
                   disabled={hasSubmitted}
                   onClick={() => {
                     setSelectedLabelId(label.id);
-                    setIsLabelDialogOpen(true);
                   }}
-                  className={`absolute flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 text-sm font-black text-white shadow-lg transition-all ${
+                  className={`absolute flex h-8 w-8 sm:h-10 sm:w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 text-xs sm:text-sm font-black text-white shadow-lg transition-all ${
                     selectedLabelId === label.id
-                      ? "border-blue-950 bg-blue-700 ring-4 ring-blue-100"
+                      ? "border-blue-950 bg-blue-700 ring-4 ring-blue-100 scale-105"
                       : "border-blue-800 bg-blue-600"
                   } ${hasSubmitted ? "cursor-default" : "cursor-pointer hover:scale-105"}`}
                   style={{ left: `${label.x}%`, top: `${label.y}%` }}
@@ -669,8 +718,8 @@ export function StudentQuestion() {
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-gray-100 bg-white p-4 shadow-sm">
-            <div className="flex flex-wrap gap-3">
+          <div className="rounded-[2rem] border border-gray-100 bg-white p-3.5 sm:p-4 shadow-sm">
+            <div className="flex flex-wrap gap-2">
               {labels.map((label) => {
                 const hasValue = Boolean((labelAnswers[label.id] ?? "").trim());
                 const labelResult = labelResultMap[label.id];
@@ -681,9 +730,8 @@ export function StudentQuestion() {
                     disabled={hasSubmitted}
                     onClick={() => {
                       setSelectedLabelId(label.id);
-                      setIsLabelDialogOpen(true);
                     }}
-                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-all ${
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
                       hasAnswerReveal && hasSubmittedAnswer
                         ? labelResult?.isCorrect
                           ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -693,7 +741,7 @@ export function StudentQuestion() {
                           : "border-gray-200 bg-gray-50 text-gray-700"
                     } ${selectedLabelId === label.id ? "ring-2 ring-blue-200" : ""} disabled:cursor-default`}
                   >
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[10px] font-black text-white">
                       {label.marker}
                     </span>
                     <span>{hasValue ? labelAnswers[label.id] : `Item ${label.marker}`}</span>
@@ -702,7 +750,7 @@ export function StudentQuestion() {
               })}
             </div>
             {!hasAnswerReveal ? (
-              <p className="mt-4 text-center text-sm font-semibold text-gray-500">
+              <p className="mt-3 text-center text-xs font-semibold text-gray-500">
                 {filledLabelsCount === labels.length
                   ? "All labels are filled. You can confirm your answer now."
                   : "Tap a marker to fill in its label."}
@@ -710,75 +758,63 @@ export function StudentQuestion() {
             ) : null}
           </div>
 
-          {selectedLabel && isLabelDialogOpen ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.96, y: 8 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96, y: 8 }}
-                className="w-full max-w-md rounded-[2rem] bg-white p-6 shadow-2xl"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-600 text-base font-black text-white">
-                      {selectedLabel.marker}
-                    </div>
-                    <div>
-                      <p className="text-sm font-black uppercase tracking-[0.18em] text-blue-600">
-                        Item {selectedLabel.marker}
-                      </p>
-                      <p className="text-xs font-semibold text-gray-500">
-                        Enter the label for this marker.
-                      </p>
-                    </div>
+          {selectedLabel ? (
+            <div className="rounded-[2rem] border border-blue-100 bg-blue-50/50 p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3 border-b border-blue-100 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white shrink-0">
+                    {selectedLabel.marker}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsLabelDialogOpen(false)}
-                    className="rounded-full border border-gray-200 px-3 py-1 text-sm font-semibold text-gray-500 transition-colors hover:bg-gray-50"
-                  >
-                    Close
-                  </button>
-                </div>
-
-                <div className="mt-5 space-y-3">
-                  <input
-                    type="text"
-                    autoFocus
-                    value={labelAnswers[selectedLabel.id] ?? ""}
-                    onChange={(e) => setLabelAnswers((prev) => ({ ...prev, [selectedLabel.id]: e.target.value }))}
-                    disabled={hasSubmitted}
-                    placeholder={`Answer for item ${selectedLabel.marker}`}
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 font-semibold outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
-                  />
-                  {hasAnswerReveal ? (
-                    <div className="space-y-2 text-sm font-semibold text-gray-500">
-                      <p>
-                        Correct label: <span className="font-black text-gray-700">{getPrimaryLabelAnswer(selectedLabel)}</span>
-                      </p>
-                      <p className={labelResultMap[selectedLabel.id]?.isCorrect ? "text-emerald-600" : "text-rose-600"}>
-                        {labelResultMap[selectedLabel.id]?.isCorrect
-                          ? "Your label matches the answer key."
-                          : "Your label does not match the answer key."}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-sm font-semibold text-gray-500">
-                      Save this answer and continue labeling the rest of the image.
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600 leading-none">
+                      Labeling Item {selectedLabel.marker}
                     </p>
-                  )}
+                    <p className="text-[10px] font-semibold text-gray-500 mt-1">
+                      Enter the label for this marker.
+                    </p>
+                  </div>
                 </div>
-
-                <div className="mt-6 flex justify-end gap-3">
+                {labels.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => setIsLabelDialogOpen(false)}
-                    className="rounded-xl border border-gray-200 px-4 py-2 font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+                    onClick={() => {
+                      const currentIndex = labels.findIndex((l) => l.id === selectedLabel.id);
+                      const nextIndex = (currentIndex + 1) % labels.length;
+                      setSelectedLabelId(labels[nextIndex].id);
+                    }}
+                    className="rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-blue-700 shadow-sm border border-blue-100 hover:bg-blue-50 transition"
                   >
-                    Done
+                    Next Marker
                   </button>
-                </div>
-              </motion.div>
+                )}
+              </div>
+
+              <div className="mt-3 space-y-2">
+                <input
+                  type="text"
+                  value={labelAnswers[selectedLabel.id] ?? ""}
+                  onChange={(e) => setLabelAnswers((prev) => ({ ...prev, [selectedLabel.id]: e.target.value }))}
+                  disabled={hasSubmitted}
+                  placeholder={`Answer for item ${selectedLabel.marker}...`}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 font-semibold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+                />
+                {hasAnswerReveal ? (
+                  <div className="space-y-1 text-xs font-semibold text-gray-500 pt-1">
+                    <p>
+                      Correct label: <span className="font-black text-gray-700">{getPrimaryLabelAnswer(selectedLabel)}</span>
+                    </p>
+                    <p className={labelResultMap[selectedLabel.id]?.isCorrect ? "text-emerald-600" : "text-rose-600"}>
+                      {labelResultMap[selectedLabel.id]?.isCorrect
+                        ? "✓ Matches the answer key."
+                        : "✗ Does not match the answer key."}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[10px] font-medium text-gray-400">
+                    Type and then tap another marker or click "Next Marker" to continue.
+                  </p>
+                )}
+              </div>
             </div>
           ) : null}
         </div>
@@ -793,39 +829,39 @@ export function StudentQuestion() {
         .filter(Boolean);
 
       return (
-        <div className="space-y-5">
-          <div className="rounded-[2rem] border border-violet-100 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-700">
-            Match every item on the left with the best option on the right. Images can help you identify the correct pair.
+        <div className="space-y-4">
+          <div className="rounded-[1.5rem] border border-violet-100 bg-violet-50 p-3.5 text-xs sm:text-sm font-semibold text-violet-700 leading-normal">
+            Match every item on the left with the best option on the right.
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             {(pairs ?? []).map((pair, index) => {
               const selectedRightId = matchingSelections[pair.id] ?? "";
               const selectedRightPair = pairs.find((candidate) => candidate.id === selectedRightId);
               const result = matchingResultMap[pair.id];
 
               return (
-                <div key={pair.id} className="rounded-[2rem] border border-gray-100 bg-white p-4 shadow-sm">
-                  <div className="space-y-4">
+                <div key={pair.id} className="rounded-[1.8rem] border border-gray-100 bg-white p-3.5 sm:p-4 shadow-sm">
+                  <div className="space-y-3">
                     {pair.leftImageUrl ? (
-                      <div className="relative overflow-hidden rounded-[1.5rem] border border-gray-100 bg-gray-50">
-                        <img src={pair.leftImageUrl} alt={pair.leftText} className="h-40 w-full object-contain" />
+                      <div className="relative overflow-hidden rounded-[1.2rem] border border-gray-100 bg-gray-50">
+                        <img src={pair.leftImageUrl} alt={pair.leftText} className="h-32 sm:h-40 w-full object-contain" />
                         <button
                           type="button"
                           onClick={() => setMatchingPreviewImage({ src: pair.leftImageUrl!, title: pair.leftText })}
-                          className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-slate-900/70 text-white shadow-lg transition hover:bg-slate-900"
+                          className="absolute left-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-slate-900/70 text-white shadow-lg transition hover:bg-slate-900"
                           aria-label={`Zoom ${pair.leftText}`}
                         >
-                          <Search size={16} />
+                          <Search size={14} />
                         </button>
                       </div>
                     ) : null}
 
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs sm:text-sm font-black text-white">
                         {index + 1}
                       </div>
-                      <p className="text-base font-black text-gray-900">{pair.leftText}</p>
+                      <p className="text-sm sm:text-base font-black text-gray-900 leading-tight">{pair.leftText}</p>
                     </div>
 
                     <select
@@ -837,7 +873,7 @@ export function StudentQuestion() {
                           [pair.id]: event.target.value,
                         }))
                       }
-                      className={`w-full rounded-2xl border px-4 py-3 font-semibold outline-none transition ${
+                      className={`w-full rounded-xl border px-3 py-2.5 text-sm font-semibold outline-none transition ${
                         hasAnswerReveal && hasSubmittedAnswer
                           ? result?.isCorrect
                             ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -854,17 +890,17 @@ export function StudentQuestion() {
                     </select>
 
                     {selectedRightPair ? (
-                      <div className="rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3">
-                        <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-500">Selected Choice</p>
-                        <div className="mt-1 flex items-center gap-3">
+                      <div className="rounded-xl border border-violet-100 bg-violet-50/50 px-3 py-2">
+                        <p className="text-[9px] font-black uppercase tracking-[0.16em] text-violet-500">Selected</p>
+                        <div className="mt-0.5 flex items-center gap-2">
                           {selectedRightPair.rightImageUrl ? (
                             <img
                               src={selectedRightPair.rightImageUrl}
                               alt={getMatchingOptionLabel(selectedRightPair)}
-                              className="h-10 w-10 rounded-xl border border-violet-100 bg-white object-cover"
+                              className="h-8 w-8 rounded-lg border border-violet-100 bg-white object-cover"
                             />
                           ) : null}
-                          <p className="text-sm font-bold text-violet-900">
+                          <p className="text-xs font-bold text-violet-900 truncate">
                             {getMatchingOptionLabel(
                               selectedRightPair,
                               orderedRightPairs.findIndex((candidate) => candidate.id === selectedRightPair.id)
@@ -875,19 +911,19 @@ export function StudentQuestion() {
                     ) : null}
 
                     {hasAnswerReveal && result ? (
-                      <div className={`rounded-2xl px-4 py-3 text-sm font-semibold ${
+                      <div className={`rounded-xl px-3 py-2 text-xs font-semibold ${
                         result.isCorrect ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
                       }`}>
                         {result.isCorrect ? (
                           "Correct match."
                         ) : (
-                          <div className="space-y-2">
-                            <p>{`Correct answer: ${result.correctRightLabel || result.correctRightText || "Image option"}`}</p>
+                          <div className="space-y-1.5">
+                            <p>{`Correct: ${result.correctRightLabel || result.correctRightText || "Image option"}`}</p>
                             {result.correctRightImageUrl ? (
                               <img
                                 src={result.correctRightImageUrl}
                                 alt={result.correctRightLabel || result.correctRightText || "Correct option"}
-                                className="h-14 w-14 rounded-xl border border-rose-100 bg-white object-cover"
+                                className="h-10 w-10 rounded-lg border border-rose-100 bg-white object-cover"
                               />
                             ) : null}
                           </div>
@@ -935,13 +971,13 @@ export function StudentQuestion() {
     }
 
     return (
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-3">
         {currentQuestion.options.map((opt, i) => (
           <button
             key={i}
             disabled={hasSubmitted}
             onClick={() => setSelectedOption(i)}
-            className={`group relative flex items-center gap-4 rounded-2xl border-2 p-5 text-left font-bold transition-all ${
+            className={`group relative flex items-center gap-4 rounded-2xl border-2 p-4 sm:p-5 text-left font-bold transition-all ${
               selectedOption === i
                 ? "border-indigo-600 bg-indigo-50 text-indigo-600"
                 : "border-gray-100 bg-white text-gray-700 hover:border-indigo-200"
@@ -1008,30 +1044,30 @@ export function StudentQuestion() {
   };
 
   return (
-    <div className="flex min-h-[500px] flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 p-6">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 p-4 sm:p-6 shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
             {currentSession.currentQuestionIndex + 1}
           </div>
           <div>
-            <span className="text-sm font-bold uppercase tracking-wider text-gray-500">Question</span>
-            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">
+            <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-500">Question</span>
+            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">
               {currentQuestion.questionType.replace(/_/g, " ")}
             </p>
           </div>
         </div>
-        <div className={`flex items-center gap-2 rounded-full px-3 py-1 font-bold ${
+        <div className={`flex items-center gap-2 rounded-full px-2.5 py-1 font-bold text-sm sm:text-base ${
           timeLeft < 5 ? "animate-pulse bg-red-100 text-red-600" : "bg-indigo-100 text-indigo-600"
         }`}>
-          <Timer size={16} />
+          <Timer size={14} />
           <span>{timeLeft}s</span>
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col p-6">
+      <div className="flex min-h-0 flex-1 flex-col p-4 sm:p-6">
         {participantSocket.isReconnecting ? (
-          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 shadow-sm">
+          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 shadow-sm shrink-0">
             <WifiOff size={18} className="shrink-0" />
             <div>
               <p className="text-sm font-black">Reconnecting...</p>
@@ -1040,7 +1076,7 @@ export function StudentQuestion() {
           </div>
         ) : null}
         {isSessionPaused ? (
-          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 shadow-sm">
+          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 shadow-sm shrink-0">
             <WifiOff size={18} className="shrink-0" />
             <div>
               <p className="text-sm font-black">Host paused the quiz</p>
@@ -1051,15 +1087,15 @@ export function StudentQuestion() {
         {!isFinished ? (
           <>
             <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-              <h2 className="mb-3 text-xl font-black leading-tight text-gray-900">{currentQuestion.text}</h2>
+              <h2 className="mb-2 text-lg sm:text-xl font-black leading-tight text-gray-900">{currentQuestion.text}</h2>
               {currentQuestion.instructions ? (
-                <p className="mb-6 text-sm font-semibold text-gray-500">{currentQuestion.instructions}</p>
+                <p className="mb-4 text-xs sm:text-sm font-semibold text-gray-500">{currentQuestion.instructions}</p>
               ) : null}
 
-              <div className="pb-6">{renderQuestionBody()}</div>
+              <div className="pb-4">{renderQuestionBody()}</div>
             </div>
 
-            <div className="mt-4 border-t border-gray-100 bg-white pt-4">
+            <div className="mt-3 border-t border-gray-100 bg-white pt-3 shrink-0">
               <button
                 onClick={handleSubmit}
                 disabled={
@@ -1069,7 +1105,7 @@ export function StudentQuestion() {
                   isSessionPaused ||
                   (currentQuestion.questionType === "multiple_choice" && selectedOption === null)
                 }
-                className={`w-full rounded-2xl py-5 font-black text-white shadow-xl transition-all ${
+                className={`w-full rounded-2xl py-4 sm:py-5 font-black text-white shadow-xl transition-all text-sm sm:text-base ${
                   hasSubmitted ||
                   isSubmitting ||
                   !participantSocket.isConnected ||
@@ -1095,9 +1131,9 @@ export function StudentQuestion() {
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-1 flex-col items-center justify-center py-10 text-center"
+            className="flex flex-1 flex-col items-center justify-center py-6 text-center overflow-y-auto"
           >
-            <div className={`mb-6 flex h-24 w-24 items-center justify-center rounded-[2rem] shadow-2xl ${
+            <div className={`mb-4 flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-[1.8rem] sm:rounded-[2rem] shadow-2xl shrink-0 ${
               showRevealResult
                 ? isCorrect
                   ? "bg-green-100 text-green-600 shadow-green-100"
@@ -1107,13 +1143,13 @@ export function StudentQuestion() {
                   : "bg-indigo-100 text-indigo-600 shadow-indigo-100"
             }`}>
               {showRevealResult ? (
-                isCorrect ? <CheckCircle2 size={48} strokeWidth={3} /> : <XCircle size={48} strokeWidth={3} />
+                isCorrect ? <CheckCircle2 size={40} strokeWidth={3} /> : <XCircle size={40} strokeWidth={3} />
               ) : (
-                <Timer size={48} strokeWidth={3} />
+                <Timer size={40} strokeWidth={3} />
               )}
             </div>
 
-            <h2 className={`mb-2 text-3xl font-black ${
+            <h2 className={`mb-1 text-2xl sm:text-3xl font-black ${
               showRevealResult
                 ? isCorrect
                   ? "text-green-600"
@@ -1124,46 +1160,46 @@ export function StudentQuestion() {
             }`}>
               {showRevealResult ? (isCorrect ? "Correct!" : "Keep Practicing") : timedOutWithoutAnswer ? "Time's Up" : "Answer Submitted"}
             </h2>
-            <p className="mb-8 font-bold text-gray-500">{renderRevealMessage()}</p>
+            <p className="mb-6 text-xs sm:text-sm font-bold text-gray-500 leading-relaxed max-w-sm">{renderRevealMessage()}</p>
 
-            <div className="w-full space-y-4 rounded-3xl border border-gray-100 bg-gray-50 p-6">
+            <div className="w-full space-y-3 sm:space-y-4 rounded-3xl border border-gray-100 bg-gray-50 p-4 sm:p-6 max-w-md">
               {currentQuestion.questionType === "label_image" && showRevealResult ? (
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400">
+                  <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold uppercase tracking-widest text-gray-400">
                     <CheckCircle2 size={14} />
                     Label Score
                   </div>
-                  <span className="text-xl font-black text-gray-900">
+                  <span className="text-base sm:text-xl font-black text-gray-900">
                     {labelCorrectCount}/{labelTotalCount || currentQuestion.labels?.length || 0}
                   </span>
                 </div>
               ) : null}
               {currentQuestion.questionType === "matching" && showRevealResult ? (
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400">
+                  <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold uppercase tracking-widest text-gray-400">
                     <CheckCircle2 size={14} />
                     Match Score
                   </div>
-                  <span className="text-xl font-black text-gray-900">
+                  <span className="text-base sm:text-xl font-black text-gray-900">
                     {matchingCorrectCount}/{matchingTotalCount || currentQuestion.matchingPairs?.length || 0}
                   </span>
                 </div>
               ) : null}
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400">
+                <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold uppercase tracking-widest text-gray-400">
                   <Award size={14} />
                   Current Rank
                 </div>
-                <span className="text-xl font-black text-gray-900">
+                <span className="text-base sm:text-xl font-black text-gray-900">
                   {currentSession.participantSummary ? `#${currentSession.participantSummary.rank}` : "--"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400">
+                <div className="flex items-center gap-2 text-[10px] sm:text-xs font-bold uppercase tracking-widest text-gray-400">
                   <Timer size={14} />
                   Time Taken
                 </div>
-                <span className="text-xl font-black text-gray-900">
+                <span className="text-base sm:text-xl font-black text-gray-900">
                   {currentSession.participantSummary?.totalResponseTimeMs
                     ? `${(currentSession.participantSummary.totalResponseTimeMs / 1000).toFixed(1)}s`
                     : "Live"}
@@ -1171,15 +1207,15 @@ export function StudentQuestion() {
               </div>
             </div>
 
-            <p className="mt-10 animate-pulse text-sm font-bold text-indigo-600">
+            <p className="mt-8 animate-pulse text-xs sm:text-sm font-bold text-indigo-600 shrink-0">
               {showRevealResult ? "Waiting for the next question..." : "Wait for the next question..."}
             </p>
           </motion.div>
         )}
       </div>
 
-      <div className="mt-auto border-t border-gray-100 bg-gray-50 p-4">
-        <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+      <div className="mt-auto border-t border-gray-100 bg-gray-50 p-3 sm:p-4 shrink-0">
+        <div className="h-1.5 sm:h-2 w-full overflow-hidden rounded-full bg-gray-200">
           <div
             className="h-full bg-indigo-600 transition-all duration-500"
             style={{ width: `${((currentSession.currentQuestionIndex + 1) / totalQuestions) * 100}%` }}

@@ -175,158 +175,160 @@ export function StudentJoin() {
   };
 
   return (
-    <div className="p-8 pb-12">
-      <div className="text-center mb-10">
-        <div className="w-16 h-16 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-3xl font-bold mx-auto mb-4 shadow-xl shadow-indigo-100">
-          Q
+    <div className="flex-1 overflow-y-auto p-5 sm:p-8 flex flex-col justify-between min-h-0">
+      <div className="flex-1 flex flex-col justify-center">
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-2xl sm:text-3xl font-bold mx-auto mb-3 sm:mb-4 shadow-xl shadow-indigo-100">
+            Q
+          </div>
+          <h1 className="text-xl sm:text-2xl font-black text-gray-900">
+            {routeCode ? "Join This Session" : "Join Session"}
+          </h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">
+            {routeCode
+              ? "Enter your details once to join the live quiz."
+              : "Enter the session code and your details to start the quiz."}
+          </p>
         </div>
-        <h1 className="text-2xl font-black text-gray-900">
-          {routeCode ? "Join This Session" : "Join Session"}
-        </h1>
-        <p className="text-gray-500 mt-1">
-          {routeCode
-            ? "Enter your details once to join the live quiz."
-            : "Enter the session code and your details to start the quiz."}
-        </p>
-      </div>
 
-      {routeCode && (
-        <div className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-500">Session Code</p>
-              <p className="mt-1 text-lg font-black text-indigo-900">{routeCode.toUpperCase()}</p>
-              <p className="mt-1 text-sm text-indigo-700">
-                {isCheckingSession
-                  ? "Checking session details..."
-                  : sessionTitle
-                    ? `Joining "${sessionTitle}"`
-                    : isSessionUnavailable
-                      ? "This session code could not be found or is not available."
-                      : "Ready to join."}
-              </p>
+        {routeCode && (
+          <div className="mb-4 sm:mb-6 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 sm:px-5 sm:py-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-500">Session Code</p>
+                <p className="mt-0.5 text-base sm:text-lg font-black text-indigo-900">{routeCode.toUpperCase()}</p>
+                <p className="mt-0.5 text-xs sm:text-sm text-indigo-700">
+                  {isCheckingSession
+                    ? "Checking session details..."
+                    : sessionTitle
+                      ? `Joining "${sessionTitle}"`
+                      : isSessionUnavailable
+                        ? "This session code could not be found or is not available."
+                        : "Ready to join."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate("/join")}
+                className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-indigo-700 shadow-sm"
+              >
+                <ArrowLeft size={14} />
+                Change
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => navigate("/join")}
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-indigo-700 shadow-sm"
-            >
-              <ArrowLeft size={16} />
-              Change
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      <form onSubmit={handleJoin} className="space-y-6">
-        <div className="space-y-4">
-          <div className="relative">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-              <IdCard size={20} />
+        <form onSubmit={handleJoin} className="space-y-4 sm:space-y-6">
+          <div className="space-y-3 sm:space-y-4">
+            <div className="relative">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                <IdCard size={20} />
+              </div>
+              <input
+                type="text"
+                placeholder="Session Code (e.g. ABC123)"
+                value={formData.code}
+                onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                readOnly={Boolean(routeCode)}
+                className={`w-full pl-12 pr-4 py-3.5 sm:py-4 border-2 rounded-2xl outline-none transition-all font-black uppercase tracking-widest text-base sm:text-lg ${
+                  routeCode
+                    ? "bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed"
+                    : "bg-gray-50 border-gray-100 focus:border-indigo-600 focus:bg-white"
+                }`}
+                required
+              />
             </div>
-            <input
-              type="text"
-              placeholder="Session Code (e.g. ABC123)"
-              value={formData.code}
-              onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-              readOnly={Boolean(routeCode)}
-              className={`w-full pl-12 pr-4 py-4 border-2 rounded-2xl outline-none transition-all font-black uppercase tracking-widest text-lg ${
-                routeCode
-                  ? "bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed"
-                  : "bg-gray-50 border-gray-100 focus:border-indigo-600 focus:bg-white"
-              }`}
-              required
-            />
-          </div>
 
-          <div className="relative">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-              <User size={20} />
+            <div className="relative">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                <User size={20} />
+              </div>
+              <input
+                type="text"
+                placeholder="Full Name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full pl-12 pr-4 py-3.5 sm:py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-indigo-600 focus:bg-white outline-none transition-all font-bold text-sm sm:text-base"
+                required
+              />
             </div>
-            <input
-              type="text"
-              placeholder="Full Name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full pl-12 pr-4 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-indigo-600 focus:bg-white outline-none transition-all font-bold"
-              required
-            />
-          </div>
 
-          <div className="relative">
-            <div className="absolute left-4 top-5 text-gray-400">
-              <Phone size={20} />
-            </div>
-            <div className="overflow-hidden rounded-2xl border-2 border-gray-100 bg-gray-50 pl-12 transition-all focus-within:border-indigo-600 focus-within:bg-white">
-              <div className="grid grid-cols-1 md:grid-cols-[minmax(160px,200px)_1fr]">
-                <div className="border-b border-gray-100 md:border-b-0 md:border-r">
-                  <p className="px-4 pt-3 text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">
-                    Country Code
-                  </p>
-                  <select
-                    value={formData.countryCode}
-                    onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })}
-                    className="h-[46px] w-full bg-transparent px-4 pb-3 font-black text-gray-700 outline-none"
-                  >
-                    {COUNTRY_CODES.map((country) => (
-                      <option key={`${country.label}-${country.value}`} value={country.value}>
-                        {country.label} ({country.value})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <p className="px-4 pt-3 text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">
-                    Phone Number
-                  </p>
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    placeholder="98765 43210"
-                    value={formData.phoneNumber}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        phoneNumber: e.target.value.replace(/[^\d\s()-]/g, ""),
-                      })
-                    }
-                    className="h-[46px] w-full bg-transparent px-4 pb-3 font-bold outline-none"
-                    required
-                  />
+            <div className="relative">
+              <div className="absolute left-4 top-[18px] text-gray-400">
+                <Phone size={20} />
+              </div>
+              <div className="overflow-hidden rounded-2xl border-2 border-gray-100 bg-gray-50 pl-12 transition-all focus-within:border-indigo-600 focus-within:bg-white">
+                <div className="grid grid-cols-[115px_1fr] sm:grid-cols-[135px_1fr]">
+                  <div className="border-r border-gray-100">
+                    <p className="px-3 pt-2 text-[9px] font-black uppercase tracking-[0.15em] text-gray-400">
+                      Code
+                    </p>
+                    <select
+                      value={formData.countryCode}
+                      onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })}
+                      className="h-[36px] w-full bg-transparent px-2 pb-2 font-black text-xs sm:text-sm text-gray-700 outline-none"
+                    >
+                      {COUNTRY_CODES.map((country) => (
+                        <option key={`${country.label}-${country.value}`} value={country.value}>
+                          {country.value} ({country.label})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <p className="px-4 pt-2 text-[9px] font-black uppercase tracking-[0.15em] text-gray-400">
+                      Phone Number
+                    </p>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      placeholder="98765 43210"
+                      value={formData.phoneNumber}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          phoneNumber: e.target.value.replace(/[^\d\s()-]/g, ""),
+                        })
+                      }
+                      className="h-[36px] w-full bg-transparent px-4 pb-2 font-bold text-sm sm:text-base outline-none"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
+              <p className="mt-1.5 text-[10px] sm:text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
+                Saved as {formData.countryCode} {formData.phoneNumber.trim() || "your number"}
+              </p>
             </div>
-            <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
-              Saved as {formData.countryCode} {formData.phoneNumber.trim() || "your number"} for leaderboard and follow-up
-            </p>
           </div>
-        </div>
 
-        <button
-          type="submit"
-          disabled={isLoading || isCheckingSession || isSessionUnavailable}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-5 rounded-2xl shadow-xl shadow-indigo-200 transition-all flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          {isLoading ? (
-            <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
-          ) : (
-            <>
-              Join the Game
-              <Play size={20} fill="currentColor" />
-            </>
-          )}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={isLoading || isCheckingSession || isSessionUnavailable}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 sm:py-5 rounded-2xl shadow-xl shadow-indigo-200 transition-all flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed text-sm sm:text-base"
+          >
+            {isLoading ? (
+              <div className="w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <>
+                Join the Game
+                <Play size={18} fill="currentColor" />
+              </>
+            )}
+          </button>
+        </form>
+      </div>
 
-      <div className="mt-12 pt-8 border-t border-gray-100">
-        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
+      <div className="mt-8 pt-6 border-t border-gray-100">
+        <div className="flex items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-2xl">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center">
-              <Users size={20} />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+              <Users size={18} />
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-900">Live Check-in</p>
-              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Name + Phone Number saved for leaderboard</p>
+              <p className="text-xs sm:text-sm font-bold text-gray-900">Live Check-in</p>
+              <p className="text-[9px] sm:text-[10px] text-gray-500 font-bold uppercase tracking-wider leading-none mt-0.5">Leaderboard profile details</p>
             </div>
           </div>
         </div>
