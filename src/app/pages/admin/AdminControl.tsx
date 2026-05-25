@@ -10,8 +10,10 @@ import { io, type Socket } from "socket.io-client";
 
 const MCQ_BAR_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
 
+import { ENV_SOCKET_URL } from "../../../config/env";
+
 function getSocketServerUrl() {
-  return import.meta.env.VITE_SOCKET_URL || "http://localhost:3001";
+  return ENV_SOCKET_URL;
 }
 
 function shuffleMatchingPairs<T>(items: T[]) {
@@ -25,7 +27,7 @@ function shuffleMatchingPairs<T>(items: T[]) {
 
 export function AdminControl() {
   const { id } = useParams();
-  const { currentSession, setSession } = useSession();
+  const { currentSession, setSession, updateSession, updateLiveMetrics } = useSession();
   const [timeLeft, setTimeLeft] = useState(0);
   const [isBusy, setIsBusy] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -37,8 +39,10 @@ export function AdminControl() {
     rightImageUrl?: string;
   }>>([]);
   const normalizedSessionId = id && /^\d+$/.test(id) ? id : null;
-  const [reloadTrigger, setReloadTrigger] = useState(0);
   const socketRef = useRef<Socket | null>(null);
+  // Track socket connection so the fallback interval knows whether to skip.
+  // Using a ref avoids adding socket state to the polling effect's dep array.
+  const socketConnectedRef = useRef(false);
 
   useEffect(() => {
     if (!normalizedSessionId) {
@@ -62,22 +66,7 @@ export function AdminControl() {
       }
     };
 
-    void loadSession();
-    const intervalId = window.setInterval(() => {
-      void loadSession();
-    }, 20000);
-
-    return () => {
-      isMounted = false;
-      window.clearInterval(intervalId);
-    };
-  }, [normalizedSessionId, setSession, reloadTrigger]);
-
-  useEffect(() => {
-    if (!normalizedSessionId) {
-      return;
-    }
-
+    // ── Socket setup ────────────────────────────────────────────────────────
     const socket: Socket = io(getSocketServerUrl(), {
       transports: ["websocket"],
       withCredentials: true,
@@ -87,31 +76,74 @@ export function AdminControl() {
       reconnectionDelayMax: 5000,
       timeout: 10000,
     });
-    
+
     socketRef.current = socket;
 
     const joinAsHost = () => {
       socket.emit("admin:join", { sessionId: normalizedSessionId });
     };
 
-    const handleAnswerNotify = () => {
-      setReloadTrigger((prev) => prev + 1);
+    const handleAnswerNotify = (payload: { answeredParticipants?: number; totalParticipants?: number }) => {
+      // Lightweight helper: only liveMetrics re-renders, not the full panel.
+      const answered = payload.answeredParticipants ?? 0;
+      const total = payload.totalParticipants ?? answered;
+      updateLiveMetrics(answered, total);
     };
 
-    socket.on("connect", joinAsHost);
-    socket.on("reconnect", joinAsHost);
-    socket.on("session:answer-notify", handleAnswerNotify);
-    
+    const handleConnected = () => {
+      socketConnectedRef.current = true;
+      joinAsHost();
+    };
+
+    const handleDisconnected = () => {
+      socketConnectedRef.current = false;
+    };
+
+    const handleReconnected = () => {
+      socketConnectedRef.current = true;
+      joinAsHost();
+      // Immediately refresh full admin state after reconnect so we don't wait
+      // up to 60 s for the next fallback interval to fire.
+      void loadSession();
+    };
+
+    socket.on("connect", handleConnected);
+    socket.on("disconnect", handleDisconnected);
+    socket.on("reconnect", handleReconnected);
+    socket.on("session:answer-count", handleAnswerNotify);
+
+    // Initial connection state if socket already connected synchronously.
+    if (socket.connected) {
+      socketConnectedRef.current = true;
+    }
+
     joinAsHost();
 
+    // ── Initial load ────────────────────────────────────────────────────────
+    void loadSession();
+
+    // ── Fallback polling — only when socket is disconnected ─────────────────
+    // 60 s interval; skips silently while socket is healthy.
+    const intervalId = window.setInterval(() => {
+      if (!socketConnectedRef.current) {
+        void loadSession();
+      }
+    }, 60_000);
+
     return () => {
-      socket.off("connect", joinAsHost);
-      socket.off("reconnect", joinAsHost);
-      socket.off("session:answer-notify", handleAnswerNotify);
+      isMounted = false;
+      window.clearInterval(intervalId);
+      socket.off("connect", handleConnected);
+      socket.off("disconnect", handleDisconnected);
+      socket.off("reconnect", handleReconnected);
+      socket.off("session:answer-count", handleAnswerNotify);
       socket.disconnect();
       socketRef.current = null;
+      socketConnectedRef.current = false;
     };
-  }, [normalizedSessionId]);
+  // Admin full-reloads come from explicit action HTTP responses (setSession
+  // in sendAction) or from socket reconnect — not from external triggers.
+  }, [normalizedSessionId, setSession, updateLiveMetrics]);
 
   const currentQuestion = currentSession
     ? currentSession.currentQuestion ?? currentSession.questions[currentSession.currentQuestionIndex]
@@ -237,12 +269,13 @@ export function AdminControl() {
     setIsBusy(true);
     try {
       const session = await updateAdminSessionState(normalizedSessionId, action);
+      // Use setSession (full replace) because the admin's HTTP response is the
+      // authoritative source of truth for the admin UI (includes liveFeed, stats, etc.).
+      // We deliberately do NOT re-emit session:state-change here — PHP already
+      // called notify_socket_server() which broadcasts to all students via the
+      // socket server. Emitting again would cause every student to receive
+      // the state update twice. PHP is the single broadcast source.
       setSession(session);
-      socketRef.current?.emit("session:state-change", {
-        action,
-        status: session.status,
-        currentQuestionIndex: session.currentQuestionIndex,
-      });
       toast.success(successMessage);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update session");

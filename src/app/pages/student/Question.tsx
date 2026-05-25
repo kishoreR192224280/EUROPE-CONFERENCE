@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Award, CheckCircle2, ChevronDown, ChevronUp, Search, Timer, WifiOff, XCircle } from "lucide-react";
 import { motion } from "motion/react";
@@ -107,9 +107,8 @@ function SortableSortingRow({
       ref={(node) => {
         dragRef(dropRef(node));
       }}
-      className={`flex items-center gap-3 rounded-2xl border-2 border-gray-100 bg-white p-3.5 sm:p-4 transition-all ${
-        isDragging ? "scale-[0.99] opacity-60 shadow-lg" : ""
-      } ${hasSubmitted ? "" : "cursor-grab active:cursor-grabbing"}`}
+      className={`flex items-center gap-3 rounded-2xl border-2 border-gray-100 bg-white p-3.5 sm:p-4 transition-all ${isDragging ? "scale-[0.99] opacity-60 shadow-lg" : ""
+        } ${hasSubmitted ? "" : "cursor-grab active:cursor-grabbing"}`}
     >
       <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs sm:text-sm font-black text-white">
         {index + 1}
@@ -153,7 +152,7 @@ function SortableSortingRow({
 export function StudentQuestion() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { currentSession, setSession, clearSession } = useSession();
+  const { currentSession, setSession, updateSession, updateParticipantCount, clearSession } = useSession();
 
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [sortingItems, setSortingItems] = useState<string[]>([]);
@@ -167,9 +166,18 @@ export function StudentQuestion() {
   const [hasRecordedTimeout, setHasRecordedTimeout] = useState(false);
   const [timeLeft, setTimeLeft] = useState(30);
   const [isFinished, setIsFinished] = useState(false);
+  const [activeQuestionId, setActiveQuestionId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAccessRevoked, setIsAccessRevoked] = useState(false);
-  const [reloadTrigger, setReloadTrigger] = useState(0);
+  const [questionChangeTrigger, setQuestionChangeTrigger] = useState(0);
+  // Stores the full answer response from submit_answer.php so we can show
+  // the correct result banner and specific part results (matching/labeling) when the 
+  // admin reveals answers — because currentQuestionResponse is only populated 
+  // from get_session.php (on refresh), never from the live submit flow.
+  const [submittedAnswerResponse, setSubmittedAnswerResponse] = useState<Awaited<ReturnType<typeof submitParticipantAnswer>> | null>(null);
+  // Ref to hold the fallback poll interval so we can cancel it as soon as
+  // the socket connects, without putting isConnected in the effect deps.
+  const fallbackTimerRef = useRef<number | null>(null);
 
   const participantJson = code ? sessionStorage.getItem(participantStorageKey(code)) : null;
   const participant = useMemo(() => parseParticipantRecord(participantJson), [participantJson]);
@@ -213,7 +221,42 @@ export function StudentQuestion() {
     enabled: Boolean(code && participant && currentSession?.id !== undefined && currentSession?.id !== null),
     onForceLogout: revokeParticipantAccess,
     onConnectionExpired: expireConnection,
-    onSessionUpdate: () => setReloadTrigger((prev) => prev + 1),
+    onSessionUpdate: (payload) => {
+      updateSession((prev) => {
+        const updates = { ...payload };
+        // Derive currentQuestion from bootstrap data when question changes.
+        // The socket sends lightweight payloads without full question content.
+        if (
+          updates.currentQuestionId != null &&
+          (updates.currentQuestionId !== prev.currentQuestionId || !prev.currentQuestion) &&
+          prev.questions?.length
+        ) {
+          const qIdx = prev.questions.findIndex(
+            (q) => String(q.id) === String(updates.currentQuestionId)
+          );
+          if (qIdx >= 0) {
+            updates.currentQuestionIndex = qIdx;
+            updates.currentQuestion = prev.questions[qIdx];
+          }
+        }
+        return updates;
+      });
+
+      if (payload.status === "waiting") {
+        navigate(`/join/${code}`, { replace: true });
+      }
+
+      if (
+        payload.currentQuestionId !== undefined &&
+        payload.currentQuestionId !== currentSession?.currentQuestionId
+      ) {
+        setQuestionChangeTrigger((prev) => prev + 1);
+      }
+    },
+    // Lightweight: new student joined — update count without full session reload.
+    onParticipantUpdate: (count) => {
+      updateParticipantCount(count);
+    },
   });
 
   const currentQuestion = currentSession?.currentQuestion ?? null;
@@ -300,6 +343,8 @@ export function StudentQuestion() {
     setHasSubmitted(false);
     setHasRecordedTimeout(false);
     setIsFinished(false);
+    setSubmittedAnswerResponse(null);
+    setActiveQuestionId(currentQuestion.id);
   };
 
   const submitAnswer = async (optionIndex: number | null, markAsSubmitted = true) => {
@@ -363,12 +408,11 @@ export function StudentQuestion() {
       setHasSubmitted(markAsSubmitted && !recordedAsTimeout);
       setHasRecordedTimeout(!markAsSubmitted || recordedAsTimeout);
       setIsFinished(true);
-      
+
       if (!recordedAsTimeout && markAsSubmitted) {
-        participantSocket.emit("student:answer-submitted", {
-          participantId: parsedParticipant.id,
-          questionId: currentQuestion.id,
-        });
+        // Store the full response so the reveal banner and detailed results
+        // show correctly without needing a page refresh.
+        setSubmittedAnswerResponse(answer);
       }
 
       if (recordedAsTimeout) {
@@ -403,9 +447,7 @@ export function StudentQuestion() {
   };
 
   useEffect(() => {
-    if (!code) {
-      return;
-    }
+    if (!code) return;
 
     const storedParticipant = sessionStorage.getItem(participantStorageKey(code));
     if (!storedParticipant) {
@@ -423,12 +465,19 @@ export function StudentQuestion() {
 
     let isMounted = true;
 
+    // Stop any existing fallback poll immediately when socket is connected.
+    if (participantSocket.isConnected && fallbackTimerRef.current !== null) {
+      window.clearInterval(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+      return;
+    }
+
     const loadSession = async () => {
+      // Never poll while the socket is delivering live updates.
+      if (participantSocket.isConnected) return;
       try {
         const session = await getPublicSession(code, participantToken);
-        if (!isMounted) {
-          return;
-        }
+        if (!isMounted) return;
 
         setSession(session);
         if (session.status === "waiting") {
@@ -439,16 +488,30 @@ export function StudentQuestion() {
       }
     };
 
-    void loadSession();
-    const pollId = window.setInterval(() => {
+    if (!participantSocket.isConnected) {
       void loadSession();
-    }, 20000);
+    }
+
+    // Only schedule the 60s fallback when the socket is disconnected.
+    if (!participantSocket.isConnected && fallbackTimerRef.current === null) {
+      fallbackTimerRef.current = window.setInterval(() => {
+        if (!participantSocket.isConnected) {
+          void loadSession();
+        }
+      }, 60_000);
+    }
 
     return () => {
       isMounted = false;
-      window.clearInterval(pollId);
+      if (fallbackTimerRef.current !== null) {
+        window.clearInterval(fallbackTimerRef.current);
+        fallbackTimerRef.current = null;
+      }
     };
-  }, [code, navigate, setSession, reloadTrigger]);
+    // NOTE: questionChangeTrigger intentionally omitted from deps.
+    // Advancing questions should NOT restart the 60s interval — that would
+    // create a brand-new poll on every question change, defeating the purpose.
+  }, [code, navigate, setSession, participantSocket.isConnected]);
 
   useEffect(() => {
     hydrateLocalQuestionState();
@@ -527,12 +590,18 @@ export function StudentQuestion() {
       return;
     }
 
+    // Prevent auto-submission race condition: if the new question just started,
+    // activeQuestionId might not have updated in the closure yet, so we wait.
+    if (activeQuestionId !== currentQuestion.id) {
+      return;
+    }
+
     if (timeLeft > 0 || hasSubmitted || hasRecordedTimeout || isSubmitting) {
       return;
     }
 
     void submitAnswer(null, false);
-  }, [currentQuestion, currentQuestionResponse, currentSession, hasRecordedTimeout, hasSubmitted, isSubmitting, timeLeft]);
+  }, [currentQuestion, currentQuestionResponse, currentSession, hasRecordedTimeout, hasSubmitted, isSubmitting, timeLeft, activeQuestionId]);
 
   if (!currentSession) {
     return null;
@@ -615,22 +684,19 @@ export function StudentQuestion() {
   const timedOutWithoutAnswer = hasRecordedTimeout && !hasSubmitted;
   const hasSubmittedAnswer = hasSubmitted || Boolean(currentQuestionResponse);
   const waitingForReveal = hasSubmittedAnswer && !hasAnswerReveal && !timedOutWithoutAnswer;
-  const labelResultMap = currentQuestionResponse?.responseData?.labelResults ?? {};
+  const labelResultMap = currentQuestionResponse?.responseData?.labelResults ?? submittedAnswerResponse?.labelResults ?? {};
   const labelResultValues = Object.values(labelResultMap);
   const labelCorrectCount = labelResultValues.filter((result) => result.isCorrect).length;
   const labelTotalCount = labelResultValues.length;
-  const matchingResultMap = currentQuestionResponse?.responseData?.matchingResults ?? {};
+  
+  const matchingResultMap = currentQuestionResponse?.responseData?.matchingResults ?? submittedAnswerResponse?.matchingResults ?? {};
   const matchingResultValues = Object.values(matchingResultMap);
   const matchingCorrectCount = matchingResultValues.filter((result) => result.isCorrect).length;
   const matchingTotalCount = matchingResultValues.length;
-  const isCorrect =
-    currentQuestion.questionType === "multiple_choice"
-      ? hasAnswerReveal && selectedOption !== null && selectedOption === currentQuestion.correctAnswer
-      : currentQuestion.questionType === "sorting"
-        ? Boolean(currentQuestionResponse?.isCorrect)
-        : currentQuestion.questionType === "matching"
-          ? matchingTotalCount > 0 && matchingCorrectCount === matchingTotalCount
-          : labelTotalCount > 0 && labelCorrectCount === labelTotalCount;
+
+  // We can just rely on the overall isCorrect flag returned by the server
+  // for all question types.
+  const isCorrect = Boolean(currentQuestionResponse?.isCorrect ?? submittedAnswerResponse?.isCorrect);
 
   const moveSortingItemByDrag = (fromIndex: number, toIndex: number) => {
     setSortingItems((prev) => {
@@ -705,11 +771,10 @@ export function StudentQuestion() {
                   onClick={() => {
                     setSelectedLabelId(label.id);
                   }}
-                  className={`absolute flex h-8 w-8 sm:h-10 sm:w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 text-xs sm:text-sm font-black text-white shadow-lg transition-all ${
-                    selectedLabelId === label.id
-                      ? "border-blue-950 bg-blue-700 ring-4 ring-blue-100 scale-105"
-                      : "border-blue-800 bg-blue-600"
-                  } ${hasSubmitted ? "cursor-default" : "cursor-pointer hover:scale-105"}`}
+                  className={`absolute flex h-8 w-8 sm:h-10 sm:w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 text-xs sm:text-sm font-black text-white shadow-lg transition-all ${selectedLabelId === label.id
+                    ? "border-blue-950 bg-blue-700 ring-4 ring-blue-100 scale-105"
+                    : "border-blue-800 bg-blue-600"
+                    } ${hasSubmitted ? "cursor-default" : "cursor-pointer hover:scale-105"}`}
                   style={{ left: `${label.x}%`, top: `${label.y}%` }}
                 >
                   {label.marker}
@@ -731,15 +796,14 @@ export function StudentQuestion() {
                     onClick={() => {
                       setSelectedLabelId(label.id);
                     }}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
-                      hasAnswerReveal && hasSubmittedAnswer
-                        ? labelResult?.isCorrect
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "border-rose-200 bg-rose-50 text-rose-700"
-                        : hasValue
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "border-gray-200 bg-gray-50 text-gray-700"
-                    } ${selectedLabelId === label.id ? "ring-2 ring-blue-200" : ""} disabled:cursor-default`}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${hasAnswerReveal && hasSubmittedAnswer
+                      ? labelResult?.isCorrect
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-rose-200 bg-rose-50 text-rose-700"
+                      : hasValue
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-gray-200 bg-gray-50 text-gray-700"
+                      } ${selectedLabelId === label.id ? "ring-2 ring-blue-200" : ""} disabled:cursor-default`}
                   >
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[10px] font-black text-white">
                       {label.marker}
@@ -873,13 +937,12 @@ export function StudentQuestion() {
                           [pair.id]: event.target.value,
                         }))
                       }
-                      className={`w-full rounded-xl border px-3 py-2.5 text-sm font-semibold outline-none transition ${
-                        hasAnswerReveal && hasSubmittedAnswer
-                          ? result?.isCorrect
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-rose-200 bg-rose-50 text-rose-700"
-                          : "border-gray-200 bg-white text-gray-700 focus:ring-2 focus:ring-violet-500"
-                      }`}
+                      className={`w-full rounded-xl border px-3 py-2.5 text-sm font-semibold outline-none transition ${hasAnswerReveal && hasSubmittedAnswer
+                        ? result?.isCorrect
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-rose-200 bg-rose-50 text-rose-700"
+                        : "border-gray-200 bg-white text-gray-700 focus:ring-2 focus:ring-violet-500"
+                        }`}
                     >
                       <option value="">Select choice</option>
                       {orderedRightPairs.map((rightPair, optionIndex) => (
@@ -911,9 +974,8 @@ export function StudentQuestion() {
                     ) : null}
 
                     {hasAnswerReveal && result ? (
-                      <div className={`rounded-xl px-3 py-2 text-xs font-semibold ${
-                        result.isCorrect ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
-                      }`}>
+                      <div className={`rounded-xl px-3 py-2 text-xs font-semibold ${result.isCorrect ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+                        }`}>
                         {result.isCorrect ? (
                           "Correct match."
                         ) : (
@@ -977,17 +1039,15 @@ export function StudentQuestion() {
             key={i}
             disabled={hasSubmitted}
             onClick={() => setSelectedOption(i)}
-            className={`group relative flex items-center gap-4 rounded-2xl border-2 p-4 sm:p-5 text-left font-bold transition-all ${
-              selectedOption === i
-                ? "border-indigo-600 bg-indigo-50 text-indigo-600"
-                : "border-gray-100 bg-white text-gray-700 hover:border-indigo-200"
-            } ${hasSubmitted && selectedOption !== i ? "opacity-50" : ""}`}
+            className={`group relative flex items-center gap-4 rounded-2xl border-2 p-4 sm:p-5 text-left font-bold transition-all ${selectedOption === i
+              ? "border-indigo-600 bg-indigo-50 text-indigo-600"
+              : "border-gray-100 bg-white text-gray-700 hover:border-indigo-200"
+              } ${hasSubmitted && selectedOption !== i ? "opacity-50" : ""}`}
           >
-            <div className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
-              selectedOption === i
-                ? "border-indigo-600 bg-indigo-600 text-white"
-                : "border-gray-100 bg-gray-50 text-gray-400 group-hover:border-indigo-200"
-            }`}>
+            <div className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${selectedOption === i
+              ? "border-indigo-600 bg-indigo-600 text-white"
+              : "border-gray-100 bg-gray-50 text-gray-400 group-hover:border-indigo-200"
+              }`}>
               {String.fromCharCode(65 + i)}
             </div>
             {opt}
@@ -1057,9 +1117,8 @@ export function StudentQuestion() {
             </p>
           </div>
         </div>
-        <div className={`flex items-center gap-2 rounded-full px-2.5 py-1 font-bold text-sm sm:text-base ${
-          timeLeft < 5 ? "animate-pulse bg-red-100 text-red-600" : "bg-indigo-100 text-indigo-600"
-        }`}>
+        <div className={`flex items-center gap-2 rounded-full px-2.5 py-1 font-bold text-sm sm:text-base ${timeLeft < 5 ? "animate-pulse bg-red-100 text-red-600" : "bg-indigo-100 text-indigo-600"
+          }`}>
           <Timer size={14} />
           <span>{timeLeft}s</span>
         </div>
@@ -1105,15 +1164,14 @@ export function StudentQuestion() {
                   isSessionPaused ||
                   (currentQuestion.questionType === "multiple_choice" && selectedOption === null)
                 }
-                className={`w-full rounded-2xl py-4 sm:py-5 font-black text-white shadow-xl transition-all text-sm sm:text-base ${
-                  hasSubmitted ||
+                className={`w-full rounded-2xl py-4 sm:py-5 font-black text-white shadow-xl transition-all text-sm sm:text-base ${hasSubmitted ||
                   isSubmitting ||
                   !participantSocket.isConnected ||
                   isSessionPaused ||
                   (currentQuestion.questionType === "multiple_choice" && selectedOption === null)
-                    ? "cursor-not-allowed bg-gray-200"
-                    : "bg-indigo-600 shadow-indigo-200 hover:bg-indigo-700"
-                }`}
+                  ? "cursor-not-allowed bg-gray-200"
+                  : "bg-indigo-600 shadow-indigo-200 hover:bg-indigo-700"
+                  }`}
               >
                 {hasSubmitted
                   ? "Submitted..."
@@ -1122,8 +1180,8 @@ export function StudentQuestion() {
                     : isSessionPaused
                       ? "Paused by Host"
                       : participantSocket.isConnected
-                      ? "Confirm Answer"
-                      : "Reconnecting..."}
+                        ? "Confirm Answer"
+                        : "Reconnecting..."}
               </button>
             </div>
           </>
@@ -1133,15 +1191,14 @@ export function StudentQuestion() {
             animate={{ opacity: 1, scale: 1 }}
             className="flex flex-1 flex-col items-center justify-center py-6 text-center overflow-y-auto"
           >
-            <div className={`mb-4 flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-[1.8rem] sm:rounded-[2rem] shadow-2xl shrink-0 ${
-              showRevealResult
-                ? isCorrect
-                  ? "bg-green-100 text-green-600 shadow-green-100"
-                  : "bg-red-100 text-red-600 shadow-red-100"
-                : timedOutWithoutAnswer
-                  ? "bg-amber-100 text-amber-600 shadow-amber-100"
-                  : "bg-indigo-100 text-indigo-600 shadow-indigo-100"
-            }`}>
+            <div className={`mb-4 flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-[1.8rem] sm:rounded-[2rem] shadow-2xl shrink-0 ${showRevealResult
+              ? isCorrect
+                ? "bg-green-100 text-green-600 shadow-green-100"
+                : "bg-red-100 text-red-600 shadow-red-100"
+              : timedOutWithoutAnswer
+                ? "bg-amber-100 text-amber-600 shadow-amber-100"
+                : "bg-indigo-100 text-indigo-600 shadow-indigo-100"
+              }`}>
               {showRevealResult ? (
                 isCorrect ? <CheckCircle2 size={40} strokeWidth={3} /> : <XCircle size={40} strokeWidth={3} />
               ) : (
@@ -1149,15 +1206,14 @@ export function StudentQuestion() {
               )}
             </div>
 
-            <h2 className={`mb-1 text-2xl sm:text-3xl font-black ${
-              showRevealResult
-                ? isCorrect
-                  ? "text-green-600"
-                  : "text-red-600"
-                : timedOutWithoutAnswer
-                  ? "text-amber-600"
-                  : "text-indigo-600"
-            }`}>
+            <h2 className={`mb-1 text-2xl sm:text-3xl font-black ${showRevealResult
+              ? isCorrect
+                ? "text-green-600"
+                : "text-red-600"
+              : timedOutWithoutAnswer
+                ? "text-amber-600"
+                : "text-indigo-600"
+              }`}>
               {showRevealResult ? (isCorrect ? "Correct!" : "Keep Practicing") : timedOutWithoutAnswer ? "Time's Up" : "Answer Submitted"}
             </h2>
             <p className="mb-6 text-xs sm:text-sm font-bold text-gray-500 leading-relaxed max-w-sm">{renderRevealMessage()}</p>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { Loader2, Users, CheckCircle2, WifiOff } from "lucide-react";
 import { motion } from "motion/react";
@@ -24,16 +24,24 @@ function getResumeRoute(code: string, status?: string) {
 export function StudentWaiting() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { currentSession, setSession, clearSession } = useSession();
-  const [reloadTrigger, setReloadTrigger] = useState(0);
+  const { currentSession, setSession, updateSession, updateParticipantCount, clearSession } = useSession();
   const participantJson = code ? sessionStorage.getItem(participantStorageKey(code)) : null;
   const participant = useMemo(() => parseParticipantRecord(participantJson), [participantJson]);
 
-  const revokeParticipantAccess = () => {
-    if (!code) {
-      return;
-    }
+  // Track whether a fallback poll is active — we only start it when the socket
+  // is NOT connected and stop it the moment the socket connects.
+  const fallbackTimerRef = useRef<number | null>(null);
+  const [socketReady, setSocketReady] = useState(false);
 
+  const stopFallback = () => {
+    if (fallbackTimerRef.current !== null) {
+      window.clearInterval(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+    }
+  };
+
+  const revokeParticipantAccess = () => {
+    if (!code) return;
     sessionStorage.removeItem(participantStorageKey(code));
     sessionStorage.removeItem(participantSocketStorageKey(code));
     clearSession();
@@ -41,10 +49,7 @@ export function StudentWaiting() {
   };
 
   const expireConnection = () => {
-    if (!code) {
-      return;
-    }
-
+    if (!code) return;
     sessionStorage.removeItem(participantStorageKey(code));
     sessionStorage.removeItem(participantSocketStorageKey(code));
     clearSession();
@@ -66,13 +71,55 @@ export function StudentWaiting() {
     enabled: Boolean(code && participant && currentSession?.id !== undefined && currentSession?.id !== null),
     onForceLogout: revokeParticipantAccess,
     onConnectionExpired: expireConnection,
-    onSessionUpdate: () => setReloadTrigger((prev) => prev + 1),
+    onSessionUpdate: (payload) => {
+      updateSession((prev) => {
+        const updates = { ...payload };
+        // Derive currentQuestion from bootstrap data when question changes.
+        // The socket sends lightweight payloads without full question content —
+        // we look up the matching question from the bootstrapped list.
+        if (
+          updates.currentQuestionId != null &&
+          (updates.currentQuestionId !== prev.currentQuestionId || !prev.currentQuestion) &&
+          prev.questions?.length
+        ) {
+          const qIdx = prev.questions.findIndex(
+            (q) => String(q.id) === String(updates.currentQuestionId)
+          );
+          if (qIdx >= 0) {
+            updates.currentQuestionIndex = qIdx;
+            updates.currentQuestion = prev.questions[qIdx];
+          }
+        }
+        return updates;
+      });
+      const nextStatus = payload.status ?? currentSession?.status;
+      if (nextStatus && code) {
+        const resumeRoute = getResumeRoute(code, nextStatus);
+        if (resumeRoute !== `/join/${code}/waiting`) {
+          navigate(resumeRoute, { replace: true });
+        }
+      }
+    },
+    // Lightweight participant-count events: update only the count, nothing else.
+    onParticipantUpdate: (count) => {
+      updateParticipantCount(count);
+    },
   });
 
+  // ── Socket readiness gate ────────────────────────────────────────────────
+  // Track when the socket becomes connected so we can stop any active fallback.
   useEffect(() => {
-    if (!code) {
-      return;
+    if (participantSocket.isConnected && !socketReady) {
+      setSocketReady(true);
+      stopFallback(); // Immediately stop any in-progress fallback poll
+    } else if (!participantSocket.isConnected && socketReady) {
+      setSocketReady(false); // Socket lost — allow fallback to restart below
     }
+  }, [participantSocket.isConnected, socketReady]);
+
+  // ── Bootstrap + fallback poll ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!code) return;
 
     const participantSession = sessionStorage.getItem(participantStorageKey(code));
     if (!participantSession) {
@@ -80,18 +127,17 @@ export function StudentWaiting() {
       return;
     }
 
-    const participantToken = (() => {
-      return parseParticipantRecord(participantSession)?.token ?? "";
-    })();
+    const participantToken = parseParticipantRecord(participantSession)?.token ?? "";
 
     let isMounted = true;
 
     const loadSession = async () => {
+      // Skip if socket is already delivering live updates
+      if (participantSocket.isConnected) return;
+
       try {
         const session = await getPublicSession(code, participantToken);
-        if (!isMounted) {
-          return;
-        }
+        if (!isMounted) return;
 
         setSession(session);
         const resumeRoute = getResumeRoute(code, session.status);
@@ -103,16 +149,30 @@ export function StudentWaiting() {
       }
     };
 
-    void loadSession();
-    const intervalId = window.setInterval(() => {
+    // Initial load only when socket is not yet connected
+    if (!participantSocket.isConnected) {
       void loadSession();
-    }, 20000);
+    }
+
+    // Start the 60-second fallback ONLY when the socket is disconnected.
+    // The interval is cleared as soon as the socket connects (see gate above).
+    if (!participantSocket.isConnected && fallbackTimerRef.current === null) {
+      fallbackTimerRef.current = window.setInterval(() => {
+        // Double-check inside the interval — socket may have connected since
+        // this interval was scheduled.
+        if (!participantSocket.isConnected) {
+          void loadSession();
+        }
+      }, 60_000);
+    }
 
     return () => {
       isMounted = false;
-      window.clearInterval(intervalId);
+      stopFallback();
     };
-  }, [code, navigate, setSession, reloadTrigger]);
+    // Re-run when connection status changes so we can (re)start the fallback
+    // only when truly disconnected.
+  }, [code, navigate, setSession, participantSocket.isConnected]);
 
   if (!currentSession) {
     return (

@@ -52,12 +52,10 @@ export function StudentJoin() {
   const navigate = useNavigate();
   const { code: routeCode } = useParams();
   const { setSession } = useSession();
-  const defaultJoinName = "Test Student";
-  const defaultJoinPhoneNumber = "9876543210";
   const [formData, setFormData] = useState({
-    name: defaultJoinName,
+    name: "",
     countryCode: "+91",
-    phoneNumber: defaultJoinPhoneNumber,
+    phoneNumber: "",
     code: routeCode?.toUpperCase() ?? ""
   });
   const [isLoading, setIsLoading] = useState(false);

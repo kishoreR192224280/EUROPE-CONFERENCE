@@ -143,10 +143,13 @@ export async function joinLiveSession(payload: {
   return data;
 }
 
-export async function getPublicSession(code: string, participantToken?: string) {
+export async function getPublicSession(code: string, participantToken?: string, scope?: "public" | "display") {
   const params = new URLSearchParams({ code });
   if (participantToken) {
     params.set("participantToken", participantToken);
+  }
+  if (scope) {
+    params.set("scope", scope);
   }
 
   const res = await fetch(BASE_URL + `get_session.php?${params.toString()}`, {

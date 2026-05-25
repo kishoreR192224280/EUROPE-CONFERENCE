@@ -1,5 +1,6 @@
 import { Award, Sparkles, Trophy } from "lucide-react";
 import { motion } from "motion/react";
+import { memo } from "react";
 
 type ParticipantSummary = {
   rank: number;
@@ -18,6 +19,24 @@ type LeaderboardEntry = {
   score: number;
   rank: number;
 };
+
+const LeaderboardRow = memo(({ entry }: { entry: LeaderboardEntry }) => {
+  return (
+    <div
+      className="flex items-center justify-between gap-3 rounded-[1.3rem] border border-white/8 bg-[#111c36]/80 px-3 py-2.5 sm:py-3"
+    >
+      <div className="min-w-0">
+        <p className="truncate text-sm sm:text-base font-black text-white">
+          #{entry.rank} {entry.name}
+        </p>
+        <p className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+          {entry.phoneNumber ?? "Participant"}
+        </p>
+      </div>
+      <p className="shrink-0 text-lg sm:text-xl font-black text-indigo-300">{entry.score}</p>
+    </div>
+  );
+});
 
 type StudentSessionEndedProps = {
   code?: string;
@@ -141,20 +160,7 @@ export function StudentSessionEnded({
               </div>
               <div className="space-y-2">
                 {leaderboard.slice(0, 3).map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="flex items-center justify-between gap-3 rounded-[1.3rem] border border-white/8 bg-[#111c36]/80 px-3 py-2.5 sm:py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm sm:text-base font-black text-white">
-                        #{entry.rank} {entry.name}
-                      </p>
-                      <p className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                        {entry.phoneNumber ?? "Participant"}
-                      </p>
-                    </div>
-                    <p className="shrink-0 text-lg sm:text-xl font-black text-indigo-300">{entry.score}</p>
-                  </div>
+                  <LeaderboardRow key={entry.id} entry={entry} />
                 ))}
               </div>
             </div>

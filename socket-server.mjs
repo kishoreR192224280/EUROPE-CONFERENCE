@@ -7,13 +7,123 @@ const BACKEND_URL = process.env.BACKEND_URL || "http://localhost/WEBSITE-backend
 const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS || 25000);
 const ADMIN_RECONNECT_GRACE_MS = Number(process.env.ADMIN_RECONNECT_GRACE_MS || 30000);
 
-const httpServer = createServer();
+const httpServer = createServer((req, res) => {
+  // CORS for HTTP endpoints
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  // Internal routes for PHP to broadcast socket events
+  if (req.method === "POST" && req.url?.startsWith("/internal/")) {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString();
+    });
+    req.on("end", () => {
+      try {
+        const payload = JSON.parse(body);
+        const { sessionId } = payload;
+
+        if (!sessionId) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Missing sessionId" }));
+          return;
+        }
+
+        const room = `session:${sessionId}`;
+
+        if (req.url === "/internal/broadcast-state-change") {
+          io.to(room).emit("session:state-changed", payload);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: true, event: "session:state-changed", room }));
+        } else if (req.url === "/internal/broadcast-leaderboard") {
+          // Separate leaderboard push so state transitions are instant and
+          // the (potentially large) leaderboard payload follows asynchronously.
+          io.to(room).emit("session:leaderboard", payload);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: true, event: "session:leaderboard", room }));
+        } else if (req.url === "/internal/broadcast-answer-notify") {
+          batcher.queue(room, "session:answer-count", payload, 500);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: true, event: "session:answer-count", room, batched: true }));
+        } else if (req.url === "/internal/broadcast-participant-joined") {
+          batcher.queue(room, "session:participant-joined", payload, 500);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ success: true, event: "session:participant-joined", room, batched: true }));
+        } else {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Not found" }));
+        }
+      } catch (err) {
+        console.error("[socket] Internal HTTP Error:", err);
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid JSON" }));
+      }
+    });
+    return;
+  }
+
+  res.writeHead(404);
+  res.end();
+});
 const io = new Server(httpServer, {
   cors: {
     origin: CLIENT_ORIGIN,
     credentials: true,
   },
 });
+
+class SessionEventBatcher {
+  constructor(io) {
+    this.io = io;
+    this.queues = new Map(); // room -> Map(event -> payload)
+    this.timers = new Map(); // room -> intervalId
+  }
+
+  queue(room, event, payload, flushIntervalMs = 500) {
+    if (!this.queues.has(room)) {
+      this.queues.set(room, new Map());
+    }
+    
+    // Latest payload wins for absolute counts
+    this.queues.get(room).set(event, payload);
+
+    if (!this.timers.has(room)) {
+      this.timers.set(room, setInterval(() => this.flush(room), flushIntervalMs));
+    }
+  }
+
+  flush(room) {
+    const roomSet = this.io.sockets.adapter.rooms.get(room);
+    if (!roomSet || roomSet.size === 0) {
+      this.cleanup(room);
+      return;
+    }
+
+    const events = this.queues.get(room);
+    if (!events || events.size === 0) return;
+
+    for (const [event, payload] of events.entries()) {
+      this.io.to(room).emit(event, payload);
+    }
+    events.clear();
+  }
+
+  cleanup(room) {
+    const timer = this.timers.get(room);
+    if (timer) clearInterval(timer);
+    this.timers.delete(room);
+    this.queues.delete(room);
+  }
+}
+
+const batcher = new SessionEventBatcher(io);
 
 const activeUsers = new Map();
 const activeAdmins = new Map();
@@ -147,41 +257,24 @@ io.on("connection", (socket) => {
     });
   });
 
-  // --- Session state broadcasting (replaces HTTP polling) ---
+  // --- Session state broadcasting (admin → students) ---
+  // NOTE: This handler is intentionally REMOVED. Admin actions trigger PHP
+  // which calls /internal/broadcast-state-change. Having the admin client
+  // also emit session:state-change here caused students to receive every
+  // state transition TWICE. PHP is the sole broadcast source.
 
-  socket.on("session:state-change", (payload = {}) => {
-    const sessionId = socket.data.adminSessionId;
-    if (!sessionId) {
-      return;
-    }
-
-    socket.to(`session:${sessionId}`).emit("session:update", {
-      action: payload.action ?? null,
-      status: payload.status ?? null,
-      currentQuestionIndex: payload.currentQuestionIndex ?? null,
-      participants: payload.participants ?? null,
-      timeRemainingSeconds: payload.timeRemainingSeconds ?? null,
-      serverNow: payload.serverNow ?? null,
-      timestamp: Date.now(),
-    });
-  });
-
-  socket.on("student:answer-submitted", (payload = {}) => {
-    const sessionKey = socket.data.sessionKey;
-    if (!sessionKey) {
-      return;
-    }
+  // --- Student heartbeat ---
+  // Students emit this every 30s while connected. We update lastSeen in
+  // memory only — zero DB queries, zero PHP calls.
+  socket.on("heartbeat", (payload) => {
+    const sessionKey = payload?.sessionKey ?? socket.data.sessionKey;
+    if (!sessionKey) return;
 
     const entry = activeUsers.get(sessionKey);
-    if (!entry) {
-      return;
+    if (entry && entry.socketId === socket.id) {
+      entry.lastSeen = Date.now();
+      activeUsers.set(sessionKey, entry);
     }
-
-    socket.to(`session:${entry.sessionId}`).emit("session:answer-notify", {
-      participantId: payload.participantId ?? null,
-      questionId: payload.questionId ?? null,
-      timestamp: Date.now(),
-    });
   });
 
   socket.on("display:join", (payload = {}) => {
@@ -264,6 +357,23 @@ io.on("connection", (socket) => {
     });
   });
 });
+
+setInterval(() => {
+  const roomSizes = {};
+  for (const [room, sockets] of io.sockets.adapter.rooms.entries()) {
+    // Only log session rooms (skip socket-id rooms which match their own socketId)
+    if (room.startsWith("session:")) {
+      roomSizes[room] = sockets.size;
+    }
+  }
+  console.log({
+    clients: io.engine.clientsCount,
+    activeStudents: activeUsers.size,
+    activeAdmins: activeAdmins.size,
+    sessionRooms: roomSizes,
+    memory: process.memoryUsage(),
+  });
+}, 30_000);
 
 httpServer.listen(PORT, () => {
   console.log(`[socket] Student session Socket.IO server listening on http://localhost:${PORT}`);

@@ -1,5 +1,6 @@
-export const BASE_URL = "http://localhost/WEBSITE-backend/";
+import { ENV_API_BASE_URL } from "../../config/env";
 
+export const BASE_URL = ENV_API_BASE_URL;
 type AdminAuthSuccess = {
   success: true;
   message: string;

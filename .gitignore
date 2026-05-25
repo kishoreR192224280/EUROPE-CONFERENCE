@@ -9,9 +9,6 @@ dist/
 .pnp/
 .pnp.js
 
-# Local env files
-.env
-.env.*
 
 # Logs
 npm-debug.log*

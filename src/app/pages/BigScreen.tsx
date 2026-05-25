@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ArrowRight, MonitorPlay, Search, Users, Trophy, Award } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -9,8 +9,10 @@ import { getPublicSession } from "../api/liveSessionApi";
 import { toast } from "sonner";
 import { io, type Socket } from "socket.io-client";
 
+import { ENV_SOCKET_URL } from "../../config/env";
+
 function getSocketServerUrl() {
-  return import.meta.env.VITE_SOCKET_URL || "http://localhost:3001";
+  return ENV_SOCKET_URL;
 }
 
 function getPrimaryLabelAnswer(label: { acceptedAnswers?: string[]; prompt: string; marker: number }) {
@@ -25,6 +27,51 @@ function shuffleMatchingPairs<T>(items: T[]) {
   }
   return next;
 }
+
+const getInitials = (name: string) =>
+  name
+    .split(" ")
+    .map((part) => part[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+const LeaderboardRow = memo(({ item, index }: { item: any; index: number }) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -50 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.1 }}
+      className={`relative flex items-center justify-between rounded-[1.75rem] border-2 p-4 lg:p-5 transition-all ${index === 0 ? "scale-[1.02] border-amber-500/50 bg-gradient-to-r from-amber-500/20 to-transparent shadow-2xl" :
+          index === 1 ? "scale-[1.01] border-slate-400/30 bg-gradient-to-r from-slate-400/20 to-transparent" :
+            index === 2 ? "scale-[1.005] border-amber-700/30 bg-gradient-to-r from-amber-700/20 to-transparent" :
+              "border-white/5 bg-white/5"
+        }`}
+    >
+      <div className="flex items-center gap-4 sm:gap-8 min-w-0">
+        <span className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl text-lg sm:text-xl font-black shadow-lg shrink-0 ${index === 0 ? "bg-gradient-to-br from-amber-400 to-amber-600 text-[#0f172a]" :
+            index === 1 ? "bg-gradient-to-br from-slate-300 to-slate-500 text-[#0f172a]" :
+              index === 2 ? "bg-gradient-to-br from-amber-600 to-amber-800 text-white" : "bg-white/10 text-white"
+          }`}>
+          {item.rank}
+        </span>
+        <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-full border-2 border-[#0f172a] bg-indigo-500 text-sm sm:text-base font-black shadow-xl">
+          {getInitials(item.name)}
+        </div>
+        <div className="space-y-0.5 min-w-0">
+          <span className="block text-xl sm:text-2xl font-black tracking-tight text-white truncate">{item.name}</span>
+          <span className="block text-[10px] sm:text-xs font-black uppercase tracking-[0.24em] text-slate-500 truncate">
+            {item.phoneNumber ?? "Participant"}
+          </span>
+        </div>
+      </div>
+      <div className="flex items-baseline gap-2 shrink-0">
+        <span className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tighter text-indigo-400">{item.score}</span>
+        <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-500">PTS</span>
+      </div>
+    </motion.div>
+  );
+});
 
 export function BigScreenEntry() {
   const navigate = useNavigate();
@@ -43,7 +90,7 @@ export function BigScreenEntry() {
 
     setIsLoading(true);
     try {
-      const session = await getPublicSession(normalizedCode);
+      const session = await getPublicSession(normalizedCode, undefined, "display");
       if (session.status === "ended" || session.status === "archived") {
         toast.error("This session has already ended and cannot be opened on the big screen");
         return;
@@ -152,10 +199,13 @@ export function BigScreenEntry() {
 }
 export function BigScreen() {
   const { code } = useParams();
-  const { currentSession, setSession } = useSession();
+  const { currentSession, setSession, updateSession, updateParticipantCount } = useSession();
   const [view, setView] = useState<"lobby" | "question" | "results" | "leaderboard" | "ended">("lobby");
   const [timeLeft, setTimeLeft] = useState(30);
-  const [reloadTrigger, setReloadTrigger] = useState(0);
+  // Track socket connection state locally so we can suppress the fallback poll.
+  const socketConnectedRef = useRef(false);
+  const fallbackTimerRef = useRef<number | null>(null);
+
   const [shuffledMatchingPairs, setShuffledMatchingPairs] = useState<Array<{
     id: string;
     leftText: string;
@@ -165,14 +215,6 @@ export function BigScreen() {
   }>>([]);
   const leaderboard = currentSession?.leaderboard ?? [];
   const currentQuestion = currentSession?.currentQuestion;
-
-  const getInitials = (name: string) =>
-    name
-      .split(" ")
-      .map((part) => part[0] ?? "")
-      .join("")
-      .slice(0, 2)
-      .toUpperCase();
 
   const labelItems = [...(currentQuestion?.labels ?? [])].sort((a, b) => a.marker - b.marker);
   const matchingPairs =
@@ -210,38 +252,95 @@ export function BigScreen() {
       socket.emit("display:join", { sessionId: String(currentSession.id) });
     };
 
-    const handleUpdate = () => {
-      setReloadTrigger((prev) => prev + 1);
+    const handleUpdate = (payload: any) => {
+      if (payload) {
+        updateSession((prev) => {
+          const updates = { ...payload };
+          // Derive currentQuestion from bootstrap data when question changes.
+          // The socket sends lightweight payloads without full question content.
+          if (
+            updates.currentQuestionId != null &&
+            (updates.currentQuestionId !== prev.currentQuestionId || !prev.currentQuestion) &&
+            prev.questions?.length
+          ) {
+            const qIdx = prev.questions.findIndex(
+              (q: any) => String(q.id) === String(updates.currentQuestionId)
+            );
+            if (qIdx >= 0) {
+              updates.currentQuestionIndex = qIdx;
+              updates.currentQuestion = prev.questions[qIdx];
+            }
+          }
+          return updates;
+        });
+      }
     };
 
-    socket.on("connect", joinDisplay);
+    const handleConnect = () => {
+      socketConnectedRef.current = true;
+      // Stop the fallback poll as soon as the socket is delivering events.
+      if (fallbackTimerRef.current !== null) {
+        window.clearInterval(fallbackTimerRef.current);
+        fallbackTimerRef.current = null;
+      }
+      joinDisplay();
+    };
+
+    const handleDisconnect = () => {
+      socketConnectedRef.current = false;
+    };
+
+    const handleLeaderboard = (payload: any) => {
+      if (payload?.leaderboard) {
+        updateSession({ leaderboard: payload.leaderboard });
+      }
+    };
+
+    // Lightweight: a student joined the lobby — only the participant count
+    // needs to update. Routing through updateParticipantCount() avoids
+    // re-rendering the question panel, timer, or leaderboard tree.
+    const handleParticipantJoined = (payload: any) => {
+      const count = payload?.participants ?? payload?.totalParticipants;
+      if (typeof count === "number") {
+        updateParticipantCount(count);
+      }
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
     socket.on("reconnect", joinDisplay);
-    socket.on("session:update", handleUpdate);
-    socket.on("session:answer-notify", handleUpdate);
+    socket.on("session:state-changed", handleUpdate);
+    // session:answer-count intentionally NOT listened here — BigScreen does not
+    // display an answer-progress bar, so these payloads are pure overhead.
+    socket.on("session:participant-joined", handleParticipantJoined);
+    socket.on("session:leaderboard", handleLeaderboard);
     socket.on("host-paused", handleUpdate);
     joinDisplay();
 
     return () => {
-      socket.off("connect", joinDisplay);
+      socketConnectedRef.current = false;
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
       socket.off("reconnect", joinDisplay);
-      socket.off("session:update", handleUpdate);
-      socket.off("session:answer-notify", handleUpdate);
+      socket.off("session:state-changed", handleUpdate);
       socket.off("host-paused", handleUpdate);
+      socket.off("session:participant-joined", handleParticipantJoined);
+      socket.off("session:leaderboard", handleLeaderboard);
       socket.disconnect();
     };
-  }, [code, currentSession?.id]);
+  }, [code, currentSession?.id, updateSession, updateParticipantCount]);
 
-  // --- HTTP fallback polling (20s) ---
+  // --- HTTP fallback polling (90s, only when socket is disconnected) ---
   useEffect(() => {
-    if (!code) {
-      return;
-    }
+    if (!code) return;
 
     let isMounted = true;
 
     const loadSession = async () => {
+      // Skip if the socket is healthy — it will push any changes.
+      if (socketConnectedRef.current) return;
       try {
-        const session = await getPublicSession(code);
+        const session = await getPublicSession(code, undefined, "display");
         if (isMounted) {
           setSession(session);
         }
@@ -250,16 +349,23 @@ export function BigScreen() {
       }
     };
 
+    // Initial load on mount (socket may not have connected yet)
     void loadSession();
-    const intervalId = window.setInterval(() => {
+
+    // 90-second fallback — longer than students because BigScreen is display-only
+    // and doesn't interact. The socket handles all real-time updates.
+    fallbackTimerRef.current = window.setInterval(() => {
       void loadSession();
-    }, 20000);
+    }, 90_000);
 
     return () => {
       isMounted = false;
-      window.clearInterval(intervalId);
+      if (fallbackTimerRef.current !== null) {
+        window.clearInterval(fallbackTimerRef.current);
+        fallbackTimerRef.current = null;
+      }
     };
-  }, [code, setSession, reloadTrigger]);
+  }, [code, setSession]);
 
   useEffect(() => {
     if (currentSession?.status === "active") {
@@ -727,39 +833,7 @@ export function BigScreen() {
                   </motion.div>
                 ) : (
                   leaderboard.slice(0, 5).map((item, i) => (
-                    <motion.div
-                      key={item.id}
-                      initial={{ opacity: 0, x: -50 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                      className={`relative flex items-center justify-between rounded-[1.75rem] border-2 p-4 lg:p-5 transition-all ${i === 0 ? "scale-[1.02] border-amber-500/50 bg-gradient-to-r from-amber-500/20 to-transparent shadow-2xl" :
-                          i === 1 ? "scale-[1.01] border-slate-400/30 bg-gradient-to-r from-slate-400/20 to-transparent" :
-                            i === 2 ? "scale-[1.005] border-amber-700/30 bg-gradient-to-r from-amber-700/20 to-transparent" :
-                              "border-white/5 bg-white/5"
-                        }`}
-                    >
-                      <div className="flex items-center gap-4 sm:gap-8 min-w-0">
-                        <span className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl text-lg sm:text-xl font-black shadow-lg shrink-0 ${i === 0 ? "bg-gradient-to-br from-amber-400 to-amber-600 text-[#0f172a]" :
-                            i === 1 ? "bg-gradient-to-br from-slate-300 to-slate-500 text-[#0f172a]" :
-                              i === 2 ? "bg-gradient-to-br from-amber-600 to-amber-800 text-white" : "bg-white/10 text-white"
-                          }`}>
-                          {item.rank}
-                        </span>
-                        <div className="flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-full border-2 border-[#0f172a] bg-indigo-500 text-sm sm:text-base font-black shadow-xl">
-                          {getInitials(item.name)}
-                        </div>
-                        <div className="space-y-0.5 min-w-0">
-                          <span className="block text-xl sm:text-2xl font-black tracking-tight text-white truncate">{item.name}</span>
-                          <span className="block text-[10px] sm:text-xs font-black uppercase tracking-[0.24em] text-slate-500 truncate">
-                            {item.phoneNumber ?? "Participant"}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-baseline gap-2 shrink-0">
-                        <span className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tighter text-indigo-400">{item.score}</span>
-                        <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-500">PTS</span>
-                      </div>
-                    </motion.div>
+                    <LeaderboardRow key={item.id} item={item} index={i} />
                   ))
                 )}
               </div>

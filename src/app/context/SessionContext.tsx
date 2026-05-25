@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, ReactNode } from "react";
 
 export const ACTIVE_ADMIN_SESSION_ID_STORAGE_KEY = "activeAdminSessionId";
 
@@ -152,49 +152,121 @@ export interface Session {
 interface SessionContextType {
   currentSession: Session | null;
   setSession: (session: Session) => void;
-  updateSession: (updates: Partial<Session>) => void;
+  updateSession: (updates: Partial<Session> | ((prev: Session) => Partial<Session>)) => void;
+  /** Lightweight: update only the participant count without touching anything else. */
+  updateParticipantCount: (count: number) => void;
+  /** Lightweight: update only live metrics (answer counts) without touching anything else. */
+  updateLiveMetrics: (answeredParticipants: number, totalParticipants: number) => void;
   clearSession: () => void;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
+/**
+ * Strips undefined (but NOT null) values from a socket payload so lightweight
+ * socket events — which omit most fields — don't accidentally overwrite valid
+ * session state with undefined. Null is kept because some fields legitimately
+ * need to be cleared (e.g. currentQuestionResponse = null on question change).
+ */
+function stripUndefined<T extends object>(obj: T): Partial<T> {
+  const result: Partial<T> = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key) && (obj[key] as unknown) !== undefined) {
+      result[key] = obj[key];
+    }
+  }
+  return result;
+}
+
+function persistSessionId(id: string | number | undefined | null) {
+  if (typeof window !== "undefined" && id !== undefined && id !== null) {
+    window.localStorage.setItem(ACTIVE_ADMIN_SESSION_ID_STORAGE_KEY, String(id));
+  }
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
 
-  const setSession = (session: Session) => {
+  const setSession = useCallback((session: Session) => {
     setCurrentSession(session);
+    persistSessionId(session?.id);
+  }, []);
 
-    if (typeof window !== "undefined" && session?.id !== undefined && session?.id !== null) {
-      window.localStorage.setItem(
-        ACTIVE_ADMIN_SESSION_ID_STORAGE_KEY,
-        String(session.id)
-      );
-    }
-  };
-  const updateSession = (updates: Partial<Session>) => {
+  const updateSession = useCallback((updates: Partial<Session> | ((prev: Session) => Partial<Session>)) => {
     setCurrentSession((prev) => {
-      if (!prev) {
-        return null;
+      if (!prev) return null;
+
+      const rawUpdates = typeof updates === "function" ? updates(prev) : updates;
+
+      // Strip undefined fields so lightweight socket payloads (which omit most
+      // fields) don't overwrite valid state. Null is intentionally kept so
+      // things like currentQuestionResponse can be explicitly cleared.
+      const nextUpdates = stripUndefined(rawUpdates);
+
+      // Auto-clear transient per-question state when the active question changes.
+      const cleanedUpdates = { ...nextUpdates };
+      if (
+        nextUpdates.currentQuestionId !== undefined &&
+        nextUpdates.currentQuestionId !== prev.currentQuestionId
+      ) {
+        if (!("currentQuestionResponse" in nextUpdates)) {
+          cleanedUpdates.currentQuestionResponse = null;
+        }
+        if (!("currentQuestionStats" in nextUpdates)) {
+          cleanedUpdates.currentQuestionStats = null;
+        }
       }
 
-      const nextSession = { ...prev, ...updates };
-      if (typeof window !== "undefined" && nextSession.id !== undefined && nextSession.id !== null) {
-        window.localStorage.setItem(
-          ACTIVE_ADMIN_SESSION_ID_STORAGE_KEY,
-          String(nextSession.id)
-        );
-      }
-
+      const nextSession = { ...prev, ...cleanedUpdates };
+      persistSessionId(nextSession.id);
       return nextSession;
     });
-  };
+  }, []);
 
-  const clearSession = () => {
+  /**
+   * Lightweight helper — updates only the participant count.
+   * Skips the update entirely if the count hasn't changed, preventing
+   * unnecessary React renders in any component that reads participants.
+   */
+  const updateParticipantCount = useCallback((count: number) => {
+    setCurrentSession((prev) => {
+      if (!prev || prev.participants === count) return prev;
+      return { ...prev, participants: count };
+    });
+  }, []);
+
+  /**
+   * Lightweight helper — updates only liveMetrics (answered/total counts).
+   * Used by session:answer-count socket events so the admin's metrics bar
+   * can refresh without triggering re-renders in question/leaderboard trees.
+   */
+  const updateLiveMetrics = useCallback((answeredParticipants: number, totalParticipants: number) => {
+    setCurrentSession((prev) => {
+      if (!prev) return null;
+      const prevMetrics = prev.liveMetrics;
+      if (
+        prevMetrics?.answeredParticipants === answeredParticipants &&
+        prevMetrics?.totalParticipants === totalParticipants
+      ) {
+        return prev; // No-op
+      }
+      return {
+        ...prev,
+        liveMetrics: {
+          totalParticipants,
+          answeredParticipants,
+          waitingParticipants: Math.max(0, totalParticipants - answeredParticipants),
+        },
+      };
+    });
+  }, []);
+
+  const clearSession = useCallback(() => {
     setCurrentSession(null);
-  };
+  }, []);
 
   return (
-    <SessionContext.Provider value={{ currentSession, setSession, updateSession, clearSession }}>
+    <SessionContext.Provider value={{ currentSession, setSession, updateSession, updateParticipantCount, updateLiveMetrics, clearSession }}>
       {children}
     </SessionContext.Provider>
   );
