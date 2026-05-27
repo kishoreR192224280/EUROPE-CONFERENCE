@@ -1,0 +1,852 @@
+import { useState, useEffect, useRef } from "react";
+import { Link, useParams } from "react-router";
+import { Play, Pause, Users, SkipForward, BarChart2, Award, ArrowRight, LayoutDashboard, QrCode as QrIcon, Eye, Clock3, CheckCircle2 } from "lucide-react";
+import { motion } from "motion/react";
+import { useSession } from "../../context/SessionContext";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { toast } from "sonner";
+import { getAdminSession, updateAdminSessionState } from "../../api/liveSessionApi";
+import { io, type Socket } from "socket.io-client";
+
+const MCQ_BAR_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
+
+import { ENV_SOCKET_URL } from "../../../config/env";
+
+function getSocketServerUrl() {
+  return ENV_SOCKET_URL;
+}
+
+function shuffleMatchingPairs<T>(items: T[]) {
+  const next = [...items];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+  }
+  return next;
+}
+
+export function AdminControl() {
+  const { id } = useParams();
+  const { currentSession, setSession, updateSession, updateLiveMetrics } = useSession();
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [isBusy, setIsBusy] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [shuffledMatchingPairs, setShuffledMatchingPairs] = useState<Array<{
+    id: string;
+    leftText: string;
+    leftImageUrl?: string;
+    rightText: string;
+    rightImageUrl?: string;
+  }>>([]);
+  const normalizedSessionId = id && /^\d+$/.test(id) ? id : null;
+  const socketRef = useRef<Socket | null>(null);
+  // Track socket connection so the fallback interval knows whether to skip.
+  // Using a ref avoids adding socket state to the polling effect's dep array.
+  const socketConnectedRef = useRef(false);
+
+  useEffect(() => {
+    if (!normalizedSessionId) {
+      setLoadError("No active live session was selected.");
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadSession = async () => {
+      try {
+        const session = await getAdminSession(normalizedSessionId);
+        if (isMounted) {
+          setLoadError("");
+          setSession(session);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setLoadError(err instanceof Error ? err.message : "Failed to load session");
+        }
+      }
+    };
+
+    // ── Socket setup ────────────────────────────────────────────────────────
+    const socket: Socket = io(getSocketServerUrl(), {
+      transports: ["websocket"],
+      withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000,
+    });
+
+    socketRef.current = socket;
+
+    const joinAsHost = () => {
+      socket.emit("admin:join", { sessionId: normalizedSessionId });
+    };
+
+    const handleAnswerNotify = (payload: { answeredParticipants?: number; totalParticipants?: number }) => {
+      // Lightweight helper: only liveMetrics re-renders, not the full panel.
+      const answered = payload.answeredParticipants ?? 0;
+      const total = payload.totalParticipants ?? answered;
+      updateLiveMetrics(answered, total);
+    };
+
+    const handleConnected = () => {
+      socketConnectedRef.current = true;
+      joinAsHost();
+    };
+
+    const handleDisconnected = () => {
+      socketConnectedRef.current = false;
+    };
+
+    const handleReconnected = () => {
+      socketConnectedRef.current = true;
+      joinAsHost();
+      // Immediately refresh full admin state after reconnect so we don't wait
+      // up to 60 s for the next fallback interval to fire.
+      void loadSession();
+    };
+
+    socket.on("connect", handleConnected);
+    socket.on("disconnect", handleDisconnected);
+    socket.on("reconnect", handleReconnected);
+    socket.on("session:answer-count", handleAnswerNotify);
+
+    // Initial connection state if socket already connected synchronously.
+    if (socket.connected) {
+      socketConnectedRef.current = true;
+    }
+
+    joinAsHost();
+
+    // ── Initial load ────────────────────────────────────────────────────────
+    void loadSession();
+
+    // ── Fallback polling — only when socket is disconnected ─────────────────
+    // 60 s interval; skips silently while socket is healthy.
+    const intervalId = window.setInterval(() => {
+      if (!socketConnectedRef.current) {
+        void loadSession();
+      }
+    }, 60_000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+      socket.off("connect", handleConnected);
+      socket.off("disconnect", handleDisconnected);
+      socket.off("reconnect", handleReconnected);
+      socket.off("session:answer-count", handleAnswerNotify);
+      socket.disconnect();
+      socketRef.current = null;
+      socketConnectedRef.current = false;
+    };
+  // Admin full-reloads come from explicit action HTTP responses (setSession
+  // in sendAction) or from socket reconnect — not from external triggers.
+  }, [normalizedSessionId, setSession, updateLiveMetrics]);
+
+  const currentQuestion = currentSession
+    ? currentSession.currentQuestion ?? currentSession.questions[currentSession.currentQuestionIndex]
+    : null;
+  const matchingPairs =
+    currentQuestion?.matchingPairs ??
+    (currentSession && currentSession.currentQuestionIndex >= 0
+      ? currentSession.questions[currentSession.currentQuestionIndex]?.matchingPairs ?? []
+      : []);
+  const isQuestionActive = currentSession?.status === "active";
+  const isSessionPaused = currentSession?.status === "paused";
+  const isSessionEnded = currentSession?.status === "ended";
+  const shouldOfferLeaderboard =
+    !!currentQuestion &&
+    currentSession?.status !== "leaderboard" &&
+    currentQuestion.showLeaderboardAfter;
+  const mcqStats =
+    currentSession?.currentQuestionStats?.optionCounts ??
+    currentQuestion?.options.map((optionText, index) => ({
+      name: String.fromCharCode(65 + index),
+      optionText,
+      count: 0,
+      isCorrect: currentQuestion.correctAnswer === index,
+    })) ??
+    [];
+
+  const formatLastActivity = (value: string | null) => {
+    if (!value) {
+      return "No recent activity";
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return "Recently active";
+    }
+
+    const diffSeconds = Math.max(0, Math.floor((Date.now() - parsed.getTime()) / 1000));
+    if (diffSeconds < 10) {
+      return "Just now";
+    }
+    if (diffSeconds < 60) {
+      return `${diffSeconds}s ago`;
+    }
+
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    if (diffMinutes < 60) {
+      return `${diffMinutes}m ago`;
+    }
+
+    const diffHours = Math.floor(diffMinutes / 60);
+    return `${diffHours}h ago`;
+  };
+
+  useEffect(() => {
+    if (!isQuestionActive || !currentQuestion) {
+      return;
+    }
+
+    if (currentSession?.status === "paused") {
+      setTimeLeft(currentSession.timeRemainingSeconds ?? currentQuestion.timer);
+      return;
+    }
+
+    const serverNowMs = currentSession?.serverNow ? new Date(currentSession.serverNow).getTime() : Date.now();
+    const offsetMs = serverNowMs - Date.now();
+    const endTimeMs = serverNowMs + ((currentSession?.timeRemainingSeconds ?? currentQuestion.timer) * 1000);
+
+    const updateTimer = () => {
+      const currentSyncedTimeMs = Date.now() + offsetMs;
+      const remainingSecs = Math.max(0, Math.ceil((endTimeMs - currentSyncedTimeMs) / 1000));
+      setTimeLeft((prev) => (prev !== remainingSecs ? remainingSecs : prev));
+    };
+
+    updateTimer();
+    const timer = window.setInterval(updateTimer, 250);
+
+    return () => window.clearInterval(timer);
+  }, [currentQuestion, currentSession?.timeRemainingSeconds, currentSession?.serverNow, currentSession?.status, isQuestionActive]);
+
+  useEffect(() => {
+    if (!currentQuestion || currentQuestion.questionType !== "matching") {
+      setShuffledMatchingPairs([]);
+      return;
+    }
+
+    setShuffledMatchingPairs(shuffleMatchingPairs(matchingPairs));
+  }, [currentQuestion?.id]);
+
+  if (!normalizedSessionId) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+        <h2 className="text-xl font-bold text-gray-900">No Live Session Selected</h2>
+        <p className="mt-2 text-gray-500">Create a session or open one from the success screen to manage it here.</p>
+        <Link
+          to="/admin/create-session"
+          className="mt-6 inline-flex rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white"
+        >
+          Create Session
+        </Link>
+      </div>
+    );
+  }
+
+  if (!currentSession) return <div>No active session</div>;
+
+  const liveFeed = currentSession.liveFeed ?? [];
+  const liveMetrics = currentSession.liveMetrics ?? {
+    totalParticipants: currentSession.participants,
+    answeredParticipants: 0,
+    waitingParticipants: currentSession.participants,
+  };
+
+  if (loadError) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+        <h2 className="text-xl font-bold text-gray-900">Unable to Load Session</h2>
+        <p className="mt-2 text-gray-500">{loadError}</p>
+        <Link
+          to="/admin/dashboard"
+          className="mt-6 inline-flex rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white"
+        >
+          Back to Dashboard
+        </Link>
+      </div>
+    );
+  }
+
+  const sendAction = async (
+    action: "launch_next" | "reveal_results" | "show_leaderboard" | "resume" | "end",
+    successMessage: string
+  ) => {
+    if (!normalizedSessionId) {
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      const session = await updateAdminSessionState(normalizedSessionId, action);
+      // Use setSession (full replace) because the admin's HTTP response is the
+      // authoritative source of truth for the admin UI (includes liveFeed, stats, etc.).
+      // We deliberately do NOT re-emit session:state-change here — PHP already
+      // called notify_socket_server() which broadcasts to all students via the
+      // socket server. Emitting again would cause every student to receive
+      // the state update twice. PHP is the single broadcast source.
+      setSession(session);
+      toast.success(successMessage);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update session");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const launchQuestion = () => {
+    const nextQuestionNumber = currentSession.currentQuestionIndex + 2;
+    const isFinishing = currentSession.currentQuestionIndex + 1 >= currentSession.questions.length;
+    void sendAction("launch_next", isFinishing ? "Session completed!" : `Question ${nextQuestionNumber} launched!`);
+  };
+
+  const revealResults = () => {
+    void sendAction("reveal_results", "Results revealed to players");
+  };
+
+  const showLeaderboardView = () => {
+    void sendAction("show_leaderboard", "Leaderboard displayed on big screen");
+  };
+
+  const endSession = () => {
+    if (isSessionEnded) {
+      return;
+    }
+    void sendAction("end", "Session ended");
+  };
+
+  const resumeSession = () => {
+    void sendAction("resume", "Session resumed");
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="flex items-center gap-6">
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live Session</span>
+            <h2 className="text-xl font-bold text-gray-900">{currentSession.title}</h2>
+          </div>
+          <div className="h-10 w-px bg-gray-100"></div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg font-bold">
+              <Users size={18} />
+              <span>{currentSession.participants}</span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg font-bold">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+              <span className="capitalize">{currentSession.status}</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <button 
+            onClick={resumeSession}
+            disabled={isBusy || !isSessionPaused}
+            className="px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-semibold transition-colors disabled:opacity-60"
+          >
+            Resume Session
+          </button>
+          <button 
+            onClick={endSession}
+            disabled={isBusy || isSessionEnded}
+            className="px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 font-semibold transition-colors text-gray-600 disabled:opacity-60"
+          >
+            End Session
+          </button>
+          <button 
+            onClick={showLeaderboardView}
+            disabled={isBusy}
+            className="px-4 py-2 bg-amber-500 text-white rounded-xl hover:bg-amber-600 font-semibold shadow-md shadow-amber-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60"
+          >
+            <Award size={18} />
+            Show Leaderboard
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm min-h-[450px] flex flex-col relative overflow-hidden">
+            {currentSession.status === "waiting" && currentSession.currentQuestionIndex === -1 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
+                <motion.div 
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  className="w-24 h-24 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center"
+                >
+                  <Play size={48} fill="currentColor" className="ml-1" />
+                </motion.div>
+                <div className="max-w-md">
+                  <h3 className="text-3xl font-bold text-gray-900">Get the party started!</h3>
+                  <p className="text-gray-500 mt-3 text-lg">
+                    {currentSession.participants} participants are waiting in the lobby. Launch the first question when you're ready.
+                  </p>
+                </div>
+                <button 
+                  onClick={launchQuestion}
+                  disabled={isBusy}
+                  className="px-10 py-4 bg-indigo-600 text-white font-black text-lg rounded-2xl hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 flex items-center gap-3 active:scale-95 disabled:opacity-60"
+                >
+                  Launch Question 1
+                  <ArrowRight size={24} />
+                </button>
+              </div>
+            ) : currentSession.status === "paused" ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
+                <div className="w-24 h-24 bg-amber-50 text-amber-600 rounded-3xl flex items-center justify-center">
+                  <Pause size={48} fill="currentColor" />
+                </div>
+                <div className="max-w-lg">
+                  <h3 className="text-3xl font-bold text-gray-900">Session Paused Safely</h3>
+                  <p className="text-gray-500 mt-3 text-lg">
+                    {currentSession.pauseReason || "The host connection was interrupted. Student timers are paused and answers are disabled."}
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={resumeSession}
+                    disabled={isBusy}
+                    className="px-10 py-4 bg-emerald-600 text-white font-black text-lg rounded-2xl hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 flex items-center gap-3 active:scale-95 disabled:opacity-60"
+                  >
+                    Resume Session
+                    <Play size={24} fill="currentColor" />
+                  </button>
+                  <button
+                    onClick={endSession}
+                    disabled={isBusy || isSessionEnded}
+                    className="px-8 py-4 border border-gray-200 text-gray-700 font-black rounded-2xl hover:bg-gray-50 transition-all disabled:opacity-60"
+                  >
+                    End Session
+                  </button>
+                </div>
+              </div>
+            ) : currentSession.status === "ended" ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
+                <div className="w-24 h-24 bg-emerald-50 text-emerald-600 rounded-3xl flex items-center justify-center">
+                  <Award size={48} />
+                </div>
+                <div>
+                  <h3 className="text-3xl font-bold text-gray-900">Session Completed</h3>
+                  <p className="text-gray-500 mt-2 text-lg">You've successfully finished this quiz session.</p>
+                </div>
+                <button 
+                  onClick={() => window.location.href = "/admin/reports"}
+                  className="px-8 py-3 bg-gray-900 text-white font-bold rounded-2xl hover:bg-gray-800 transition-all flex items-center gap-2"
+                >
+                  View Final Reports
+                  <BarChart2 size={20} />
+                </button>
+              </div>
+            ) : currentQuestion ? (
+              <div className="flex-1 flex flex-col">
+                <div className="flex items-start justify-between mb-8">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-black uppercase tracking-wider">
+                        Question {currentSession.currentQuestionIndex + 1} of {currentSession.questions.length}
+                      </span>
+                      <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${
+                        isQuestionActive ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
+                      }`}>
+                        {isQuestionActive ? "Accepting Answers" : "Results Revealed"}
+                      </span>
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-900 leading-tight">
+                      {currentQuestion.text}
+                    </h3>
+                    {currentQuestion.instructions ? (
+                      <p className="mt-3 text-sm font-semibold text-gray-500">{currentQuestion.instructions}</p>
+                    ) : null}
+                  </div>
+                  <div className="ml-8">
+                    <motion.div 
+                      key={timeLeft}
+                      initial={{ scale: 1.1, color: "#ef4444" }}
+                      animate={{ scale: 1, color: timeLeft < 5 ? "#ef4444" : "#4f46e5" }}
+                      className={`w-24 h-24 rounded-3xl flex flex-col items-center justify-center border-4 ${
+                        timeLeft < 5 ? "border-red-500 text-red-500 animate-pulse" : "border-indigo-600 text-indigo-600"
+                      } bg-white shadow-xl shadow-gray-100`}
+                    >
+                      <span className="text-4xl font-black">{timeLeft}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest">Sec</span>
+                    </motion.div>
+                  </div>
+                </div>
+
+                {isQuestionActive ? (
+                  <div className="flex-1 flex flex-col">
+                    {currentQuestion.questionType === "sorting" ? (
+                      <div className="mb-8 space-y-3">
+                        {(currentQuestion.items ?? []).map((item, index) => (
+                          <div key={`${item}-${index}`} className="flex items-center gap-4 rounded-2xl border-2 border-gray-50 bg-gray-50/50 p-5">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 font-black text-white shadow-sm">
+                              {index + 1}
+                            </div>
+                            <span className="font-bold text-gray-700">{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : currentQuestion.questionType === "matching" ? (
+                      <div className="mb-8 grid gap-5 lg:grid-cols-2">
+                        <div className="rounded-3xl border border-gray-100 bg-gray-50 p-5">
+                          <p className="mb-4 text-xs font-black uppercase tracking-[0.18em] text-blue-600">Left Options</p>
+                          <div className="space-y-3">
+                            {matchingPairs.map((pair, index) => (
+                              <div key={pair.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                                <div className="flex items-start gap-3">
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">
+                                    {index + 1}
+                                  </div>
+                                  <div className="min-w-0 flex-1 space-y-3">
+                                    {pair.leftImageUrl ? (
+                                      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-gray-50">
+                                        <img src={pair.leftImageUrl} alt={pair.leftText} className="h-24 w-full object-contain" />
+                                      </div>
+                                    ) : null}
+                                    <p className="font-bold text-gray-800">{pair.leftText}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="rounded-3xl border border-gray-100 bg-gray-50 p-5">
+                          <p className="mb-4 text-xs font-black uppercase tracking-[0.18em] text-violet-600">Match Bank</p>
+                          <div className="space-y-3">
+                            {shuffledMatchingPairs.map((pair, index) => (
+                              <div key={pair.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                                <div className="flex items-start gap-3">
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm font-black text-white">
+                                    {String.fromCharCode(65 + index)}
+                                  </div>
+                                  <div className="min-w-0 flex-1 space-y-3">
+                                    {pair.rightImageUrl ? (
+                                      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-gray-50">
+                                        <img src={pair.rightImageUrl} alt={pair.rightText} className="h-24 w-full object-contain" />
+                                      </div>
+                                    ) : null}
+                                    <p className="font-bold text-gray-800">{pair.rightText}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : currentQuestion.questionType === "label_image" ? (
+                      <div className="mb-8 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+                        <div className="rounded-3xl border border-gray-100 bg-gray-50 p-4">
+                          <div className="relative mx-auto aspect-[4/3] max-w-xl overflow-hidden rounded-3xl bg-white">
+                            {currentQuestion.mediaUrl ? (
+                              <img src={currentQuestion.mediaUrl} alt="Question reference" className="h-full w-full object-cover" />
+                            ) : null}
+                            {(currentQuestion.labels ?? []).map((label) => (
+                              <div
+                                key={label.id}
+                                className="absolute flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-blue-600 text-sm font-black text-white shadow-lg"
+                                style={{ left: `${label.x}%`, top: `${label.y}%` }}
+                              >
+                                {label.marker}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          {(currentQuestion.labels ?? []).map((label) => (
+                            <div key={label.id} className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
+                              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">Marker {label.marker}</p>
+                              <p className="mt-2 font-bold text-gray-800">{label.prompt}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mb-8 grid grid-cols-2 gap-4">
+                        {currentQuestion.options.map((opt, i) => (
+                          <div key={i} className="flex items-center gap-4 rounded-2xl border-2 border-gray-50 bg-gray-50/50 p-5 transition-all hover:border-indigo-100">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white font-black text-gray-400 shadow-sm">
+                              {String.fromCharCode(65 + i)}
+                            </div>
+                            <span className="font-bold text-gray-700">{opt}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    <div className="mt-auto flex justify-center gap-4">
+                      <button 
+                        onClick={revealResults}
+                        disabled={isBusy}
+                        className="px-8 py-4 bg-gray-900 text-white font-bold rounded-2xl hover:bg-gray-800 transition-all flex items-center gap-3 shadow-xl shadow-gray-200 disabled:opacity-60"
+                      >
+                        <Pause size={20} fill="currentColor" />
+                        Stop Timer & Reveal
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col">
+                    {currentQuestion.questionType === "multiple_choice" ? (
+                      <div className="mb-8 h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={mcqStats}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                            <YAxis hide />
+                            <Tooltip
+                              cursor={{ fill: "transparent" }}
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  return (
+                                    <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-xl">
+                                      <p className="font-black text-gray-900">{payload[0].value} Players</p>
+                                      <p className="text-xs font-bold uppercase text-gray-500">Option {payload[0].payload.name}</p>
+                                      <p className="mt-1 text-sm font-semibold text-gray-700">{payload[0].payload.optionText}</p>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Bar dataKey="count" radius={[12, 12, 0, 0]}>
+                              {mcqStats.map((entry, index) => (
+                                <Cell
+                                  key={`cell-${index}`}
+                                  fill={entry.isCorrect ? "#10b981" : MCQ_BAR_COLORS[index % MCQ_BAR_COLORS.length]}
+                                  fillOpacity={entry.isCorrect ? 1 : 0.4}
+                                />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : currentQuestion.questionType === "sorting" ? (
+                      <div className="mb-8 rounded-3xl border border-emerald-100 bg-emerald-50 p-6">
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-600">Correct Order</p>
+                        <div className="mt-4 space-y-3">
+                          {(currentQuestion.correctOrder ?? currentQuestion.items ?? []).map((item, index) => (
+                            <div key={`${item}-${index}`} className="flex items-center gap-4 rounded-2xl bg-white px-4 py-3">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-sm font-black text-white">
+                                {index + 1}
+                              </div>
+                              <span className="font-bold text-gray-800">{item}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : currentQuestion.questionType === "matching" ? (
+                      <div className="mb-8 space-y-4">
+                        {matchingPairs.map((pair, index) => (
+                          <div key={pair.id} className="rounded-3xl border border-emerald-100 bg-emerald-50 p-5">
+                            <div className="grid gap-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">
+                                    {index + 1}
+                                  </div>
+                                  <p className="font-black text-gray-900">{pair.leftText}</p>
+                                </div>
+                                {pair.leftImageUrl ? (
+                                  <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-white">
+                                    <img src={pair.leftImageUrl} alt={pair.leftText} className="h-28 w-full object-contain" />
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              <div className="mx-auto rounded-full bg-emerald-600 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-white">
+                                Correct Match
+                              </div>
+
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-sm font-black text-white">
+                                    {String.fromCharCode(65 + index)}
+                                  </div>
+                                  <p className="font-black text-gray-900">{pair.rightText}</p>
+                                </div>
+                                {pair.rightImageUrl ? (
+                                  <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-white">
+                                    <img src={pair.rightImageUrl} alt={pair.rightText} className="h-28 w-full object-contain" />
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mb-8 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+                        <div className="rounded-3xl border border-gray-100 bg-gray-50 p-4">
+                          <div className="relative mx-auto aspect-[4/3] max-w-xl overflow-hidden rounded-3xl bg-white">
+                            {currentQuestion.mediaUrl ? (
+                              <img src={currentQuestion.mediaUrl} alt="Answer key" className="h-full w-full object-cover" />
+                            ) : null}
+                            {(currentQuestion.labels ?? []).map((label) => (
+                              <div
+                                key={label.id}
+                                className="absolute flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-emerald-600 text-sm font-black text-white shadow-lg"
+                                style={{ left: `${label.x}%`, top: `${label.y}%` }}
+                              >
+                                {label.marker}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          {(currentQuestion.labels ?? []).map((label) => (
+                            <div key={label.id} className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                              <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-600">Marker {label.marker}</p>
+                              <p className="mt-2 text-lg font-black text-gray-900">{label.acceptedAnswers?.[0] ?? label.prompt}</p>
+                              <p className="mt-1 text-sm font-semibold text-gray-500">{label.prompt}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="mt-auto flex justify-center gap-4">
+                      <button 
+                        onClick={shouldOfferLeaderboard ? showLeaderboardView : launchQuestion}
+                        disabled={isBusy}
+                        className="px-10 py-4 bg-indigo-600 text-white font-black text-lg rounded-2xl hover:bg-indigo-700 transition-all flex items-center gap-3 shadow-xl shadow-indigo-100 active:scale-95 disabled:opacity-60"
+                      >
+                        {currentSession.currentQuestionIndex + 1 === currentSession.questions.length
+                          ? "End session"
+                          : shouldOfferLeaderboard
+                            ? "Show Leaderboard"
+                            : "Next Question"}
+                        <SkipForward size={24} fill="currentColor" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+            <h3 className="font-black text-gray-900 mb-4 flex items-center justify-between">
+              Live Feed
+              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px] font-black uppercase tracking-widest">
+                {isQuestionActive ? "Voting Open" : "Standby"}
+              </span>
+            </h3>
+            <div className="mb-4 grid grid-cols-3 gap-3">
+              <div className="rounded-xl bg-indigo-50 p-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Joined</p>
+                <p className="mt-1 text-xl font-black text-indigo-700">{liveMetrics.totalParticipants}</p>
+              </div>
+              <div className="rounded-xl bg-emerald-50 p-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Answered</p>
+                <p className="mt-1 text-xl font-black text-emerald-700">{liveMetrics.answeredParticipants}</p>
+              </div>
+              <div className="rounded-xl bg-amber-50 p-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">Waiting</p>
+                <p className="mt-1 text-xl font-black text-amber-700">{liveMetrics.waitingParticipants}</p>
+              </div>
+            </div>
+            <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
+              {liveFeed.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center">
+                  <Users size={24} className="mx-auto text-gray-300" />
+                  <p className="mt-3 text-sm font-bold text-gray-900">No participant activity yet</p>
+                  <p className="mt-1 text-xs font-medium text-gray-500">
+                    Joined students and answer submissions will appear here in real time.
+                  </p>
+                </div>
+              ) : liveFeed.map((entry, i) => (
+                <motion.div 
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.06 }}
+                  key={entry.id} 
+                  className="flex items-center gap-3 rounded-2xl border border-transparent bg-gray-50 p-3 transition-all hover:border-indigo-100 hover:bg-white"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-gradient-to-br from-indigo-500 to-purple-600 text-xs font-bold text-white shadow-sm">
+                    {entry.name
+                      .split(" ")
+                      .map((part) => part[0] ?? "")
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-xs font-black text-gray-900">{entry.name}</p>
+                      {entry.selectedOptionIndex !== null ? (
+                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-indigo-600">
+                          {String.fromCharCode(65 + entry.selectedOptionIndex)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="truncate text-[10px] font-bold uppercase tracking-tight text-gray-500">
+                      {entry.activityLabel}
+                    </p>
+                    <div className="mt-1 flex items-center gap-3 text-[10px] font-semibold text-gray-400">
+                      <span>{entry.phoneNumber ?? "No phone saved"}</span>
+                      <span>{formatLastActivity(entry.lastActivityAt)}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-xs font-black text-gray-700">{entry.score} pts</span>
+                    <div className="flex items-center gap-1">
+                      {entry.presence === "active" ? (
+                        <CheckCircle2 size={14} className="text-emerald-500" />
+                      ) : entry.presence === "waiting" ? (
+                        <Eye size={14} className="text-amber-500" />
+                      ) : (
+                        <Clock3 size={14} className="text-gray-300" />
+                      )}
+                      <span className={`h-2 w-2 rounded-full ${
+                        entry.presence === "active"
+                          ? "bg-emerald-500"
+                          : entry.presence === "waiting"
+                            ? "bg-amber-400"
+                            : "bg-gray-300"
+                      }`}></span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-6 rounded-3xl text-white shadow-xl shadow-indigo-100 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition-all"></div>
+            <h3 className="font-black mb-4 relative z-10 flex items-center gap-2">
+              <LayoutDashboard size={20} />
+              Display Controls
+            </h3>
+            <div className="space-y-3 relative z-10">
+              <button 
+                onClick={() => window.open(`/big-screen/${currentSession.code}`, '_blank')}
+                className="w-full flex items-center justify-between p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all text-sm font-black active:scale-[0.98]"
+              >
+                Open Projector View
+                <ArrowRight size={18} />
+              </button>
+              <button 
+                onClick={showLeaderboardView}
+                className="w-full flex items-center justify-between p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all text-sm font-black active:scale-[0.98]"
+              >
+                Reveal Leaderboard
+                <Award size={18} />
+              </button>
+              <button className="w-full flex items-center justify-between p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all text-sm font-black active:scale-[0.98]">
+                Show QR Code
+                <QrIcon size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
