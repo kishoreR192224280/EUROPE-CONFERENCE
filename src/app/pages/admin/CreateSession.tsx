@@ -1099,27 +1099,6 @@ export function CreateSession() {
               />
             </div>
           </div>
-
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div className="group flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-gray-200 p-8 transition-colors hover:border-blue-400">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-50 text-gray-400 transition-colors group-hover:bg-blue-50 group-hover:text-blue-500">
-                <ImageIcon size={24} />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-semibold text-gray-900">Session Thumbnail</p>
-                <p className="text-xs text-gray-500">Keep using URLs for now, then connect upload later</p>
-              </div>
-            </div>
-            <div className="group flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-gray-200 p-8 transition-colors hover:border-blue-400">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-50 text-gray-400 transition-colors group-hover:bg-blue-50 group-hover:text-blue-500">
-                <Plus size={24} />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-semibold text-gray-900">Intro Video</p>
-                <p className="text-xs text-gray-500">Prepared for richer media in the next phase</p>
-              </div>
-            </div>
-          </div>
         </section>
 
         <div className="space-y-4">

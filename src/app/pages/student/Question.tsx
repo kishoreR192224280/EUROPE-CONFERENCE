@@ -681,9 +681,13 @@ export function StudentQuestion() {
   };
 
   const showRevealResult = hasSubmitted && hasAnswerReveal;
+  // timedOutWithoutAnswer covers the settled case (auto-submit resolved and recorded timeout).
   const timedOutWithoutAnswer = hasRecordedTimeout && !hasSubmitted;
+  // isTimedOut also covers the transient window where isFinished is true (timer hit 0)
+  // but the async auto-submit hasn't resolved yet — ensures "Time's Up" shows immediately.
+  const isTimedOut = timedOutWithoutAnswer || (isFinished && !hasSubmitted && !hasRecordedTimeout && timeLeft === 0);
   const hasSubmittedAnswer = hasSubmitted || Boolean(currentQuestionResponse);
-  const waitingForReveal = hasSubmittedAnswer && !hasAnswerReveal && !timedOutWithoutAnswer;
+  const waitingForReveal = hasSubmittedAnswer && !hasAnswerReveal && !isTimedOut;
   const labelResultMap = currentQuestionResponse?.responseData?.labelResults ?? submittedAnswerResponse?.labelResults ?? {};
   const labelResultValues = Object.values(labelResultMap);
   const labelCorrectCount = labelResultValues.filter((result) => result.isCorrect).length;
@@ -1092,7 +1096,7 @@ export function StudentQuestion() {
       return "Your answer has been submitted. Wait for others to submit and for the host to reveal the result.";
     }
 
-    if (timedOutWithoutAnswer) {
+    if (isTimedOut) {
       if (currentQuestion.questionType === "multiple_choice" && selectedOption !== null) {
         return "You selected an option, but it was recorded as unanswered because Confirm Answer was not clicked in time.";
       }
@@ -1195,7 +1199,7 @@ export function StudentQuestion() {
               ? isCorrect
                 ? "bg-green-100 text-green-600 shadow-green-100"
                 : "bg-red-100 text-red-600 shadow-red-100"
-              : timedOutWithoutAnswer
+              : isTimedOut
                 ? "bg-amber-100 text-amber-600 shadow-amber-100"
                 : "bg-indigo-100 text-indigo-600 shadow-indigo-100"
               }`}>
@@ -1210,11 +1214,11 @@ export function StudentQuestion() {
               ? isCorrect
                 ? "text-green-600"
                 : "text-red-600"
-              : timedOutWithoutAnswer
+              : isTimedOut
                 ? "text-amber-600"
                 : "text-indigo-600"
               }`}>
-              {showRevealResult ? (isCorrect ? "Correct!" : "Keep Practicing") : timedOutWithoutAnswer ? "Time's Up" : "Answer Submitted"}
+              {showRevealResult ? (isCorrect ? "Correct!" : "Keep Practicing") : isTimedOut ? "Time's Up" : "Answer Submitted"}
             </h2>
             <p className="mb-6 text-xs sm:text-sm font-bold text-gray-500 leading-relaxed max-w-sm">{renderRevealMessage()}</p>
 
