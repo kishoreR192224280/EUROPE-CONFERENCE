@@ -15,12 +15,12 @@
 // ─── Raw values ──────────────────────────────────────────────────
 
 const rawApiBase: string =
-  import.meta.env.VITE_API_BASE_URL || "http://103.249.82.251:8080/WEBSITE-backend/";
-    //import.meta.env.VITE_API_BASE_URL || "http://localhost/WEBSITE-backend/";
+  import.meta.env.VITE_API_BASE_URL || "https://europe-conference.infinityfree.me/WEBSITE-backend/";
+//import.meta.env.VITE_API_BASE_URL || "http://localhost/WEBSITE-backend/";
 const rawSocketUrl: string =
-   import.meta.env.VITE_SOCKET_URL || "http://103.249.82.251:8012";
-  // import.meta.env.VITE_SOCKET_URL || "http://localhost:3001";
- 
+  import.meta.env.VITE_SOCKET_URL || "https://conference-socket.onrender.com";
+// import.meta.env.VITE_SOCKET_URL || "http://localhost:3001";
+
 // ─── Normalisation ───────────────────────────────────────────────
 
 /** API base URL always ends with a trailing slash. */
