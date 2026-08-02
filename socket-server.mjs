@@ -1,23 +1,18 @@
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 
-// const PORT = Number(process.env.SOCKET_PORT || 8012);
-// const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://103.249.82.251:8011";
-// const BACKEND_URL = process.env.BACKEND_URL || "http://103.249.82.251:8080/WEBSITE-backend";
-// const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS || 25000);
-// const ADMIN_RECONNECT_GRACE_MS = Number(process.env.ADMIN_RECONNECT_GRACE_MS || 30000);
-
-const PORT = Number(process.env.SOCKET_PORT || 3001);
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost/WEBSITE-backend";
+const PORT = Number(process.env.PORT || process.env.SOCKET_PORT || 8012);
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://103.249.82.251:8011";
+const BACKEND_URL = process.env.BACKEND_URL || "http://103.249.82.251:8080/WEBSITE-backend";
 const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS || 25000);
 const ADMIN_RECONNECT_GRACE_MS = Number(process.env.ADMIN_RECONNECT_GRACE_MS || 30000);
+const INTERNAL_SECRET = process.env.INTERNAL_SECRET || "";
 
 const httpServer = createServer((req, res) => {
   // CORS for HTTP endpoints
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") {
     res.writeHead(204);
@@ -25,8 +20,32 @@ const httpServer = createServer((req, res) => {
     return;
   }
 
-  // Internal routes for PHP to broadcast socket events
+  // ── Health check for Render ────────────────────────────────────
+  if (req.method === "GET" && req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({
+      status: "ok",
+      uptime: process.uptime(),
+      clients: io.engine.clientsCount,
+      activeStudents: activeUsers.size,
+      activeAdmins: activeAdmins.size,
+      timestamp: new Date().toISOString(),
+    }));
+    return;
+  }
+
+  // ── Internal routes for PHP to broadcast socket events ─────────
   if (req.method === "POST" && req.url?.startsWith("/internal/")) {
+    // Protect with shared secret – PHP must send Authorization: Bearer <secret>
+    if (INTERNAL_SECRET) {
+      const authHeader = req.headers["authorization"] || "";
+      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+      if (token !== INTERNAL_SECRET) {
+        res.writeHead(403, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Forbidden" }));
+        return;
+      }
+    }
     let body = "";
     req.on("data", (chunk) => {
       body += chunk.toString();
@@ -97,7 +116,7 @@ class SessionEventBatcher {
     if (!this.queues.has(room)) {
       this.queues.set(room, new Map());
     }
-    
+
     // Latest payload wins for absolute counts
     this.queues.get(room).set(event, payload);
 
@@ -382,6 +401,6 @@ setInterval(() => {
   });
 }, 30_000);
 
-httpServer.listen(PORT, () => {
-  console.log(`[socket] Student session Socket.IO server listening on http://103.249.82.251:${PORT}`);
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`[socket] Student session Socket.IO server listening on port ${PORT}`);
 });

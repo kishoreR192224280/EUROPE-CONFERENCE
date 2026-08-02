@@ -34,8 +34,7 @@ export default defineConfig({
 
  server: {
   host: '0.0.0.0',
-   port: 5173,
-  // port: 8011,
+   port: 8011,
   strictPort: true,
   allowedHosts: ["127.0.0.1", "172.25.48.53", "103.249.82.251"],
  },
