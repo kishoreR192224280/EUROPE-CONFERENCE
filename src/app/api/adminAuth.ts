@@ -1,6 +1,6 @@
 import { ENV_API_BASE_URL } from "../../config/env";
 
-export const BASE_URL = 'https://europe-conference.infinityfree.me/WEBSITE-backend/';
+export const BASE_URL = 'https://website-backend-gp6q.onrender.com/WEBSITE-backend/';
 
 type AdminAuthSuccess = {
   success: true;
