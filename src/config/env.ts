@@ -15,7 +15,7 @@
 // ─── Raw values ──────────────────────────────────────────────────
 
 const rawApiBase: string =
-  import.meta.env.VITE_API_BASE_URL || "https://europe-conference.infinityfree.me/WEBSITE-backend/";
+  import.meta.env.VITE_API_BASE_URL || "https://website-backend-gp6q.onrender.com";
 //import.meta.env.VITE_API_BASE_URL || "http://localhost/WEBSITE-backend/";
 const rawSocketUrl: string =
   import.meta.env.VITE_SOCKET_URL || "https://conference-socket.onrender.com";
