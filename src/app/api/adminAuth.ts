@@ -1,6 +1,6 @@
-import { ENV_API_BASE_URL } from "../../config/env";
+import { ENV_API_BASE_URL } from "../../config/env.ts";
 
-export const BASE_URL = 'https://website-backend-gp6q.onrender.com';
+export const BASE_URL = ENV_API_BASE_URL;
 
 type AdminAuthSuccess = {
   success: true;
