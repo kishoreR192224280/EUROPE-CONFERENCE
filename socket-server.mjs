@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 
-const PORT = Number(process.env.SOCKET_PORT || 3001);
+const PORT = Number(process.env.PORT || 3001);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost/WEBSITE-backend";
 const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS || 25000);
@@ -10,12 +10,35 @@ const ADMIN_RECONNECT_GRACE_MS = Number(process.env.ADMIN_RECONNECT_GRACE_MS || 
 const httpServer = createServer((req, res) => {
   // CORS for HTTP endpoints
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, OPTIONS"
+  );
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") {
     res.writeHead(204);
     res.end();
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/") {
+    res.writeHead(200, {
+      "Content-Type": "text/plain",
+    });
+    res.end("Socket.IO server is running");
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/health") {
+    res.writeHead(200, {
+      "Content-Type": "application/json",
+    });
+    res.end(
+      JSON.stringify({
+        status: "ok",
+      })
+    );
     return;
   }
 
@@ -375,6 +398,6 @@ setInterval(() => {
   });
 }, 30_000);
 
-httpServer.listen(PORT, () => {
-  console.log(`[socket] Student session Socket.IO server listening on http://localhost:${PORT}`);
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`[socket] Socket.IO server listening on port ${PORT}`);
 });
