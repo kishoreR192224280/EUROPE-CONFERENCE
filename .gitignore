@@ -39,6 +39,11 @@ coverage/
 # Vite
 *.local
 
+# Environment files
+.env
+.env.*
+!.env.example
+
 # Optional: lockfiles if using a different package manager
 # package-lock.json
 # pnpm-lock.yaml
