@@ -14,11 +14,20 @@
 
 // ─── Raw values ──────────────────────────────────────────────────
 
-const rawApiBase: string =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost/WEBSITE-backend/";
+const DEFAULT_API_BASE_URL = "http://localhost/WEBSITE-backend/";
+const DEFAULT_SOCKET_URL = "http://localhost:3001";
 
-const rawSocketUrl: string =
-  import.meta.env.VITE_SOCKET_URL || "http://localhost:3001";
+function readEnvString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+const rawApiBase = readEnvString(import.meta.env.VITE_API_BASE_URL) ?? DEFAULT_API_BASE_URL;
+const rawSocketUrl = readEnvString(import.meta.env.VITE_SOCKET_URL) ?? DEFAULT_SOCKET_URL;
 
 // ─── Normalisation ───────────────────────────────────────────────
 
@@ -26,18 +35,18 @@ const rawSocketUrl: string =
 const apiBaseUrl = rawApiBase.endsWith("/") ? rawApiBase : `${rawApiBase}/`;
 
 /** WebSocket server URL – strip any accidental trailing slash. */
-const socketUrl = rawSocketUrl.replace(/\/$/, "");
+const socketUrl = rawSocketUrl.replace(/\/+$/, "");
 
 // ─── Dev-time validation ─────────────────────────────────────────
 
 if (import.meta.env.DEV) {
-  if (!import.meta.env.VITE_API_BASE_URL) {
+  if (!readEnvString(import.meta.env.VITE_API_BASE_URL)) {
     console.warn(
       "[env] VITE_API_BASE_URL is not set – falling back to localhost.\n" +
         "Create a .env file based on .env.example to configure this."
     );
   }
-  if (!import.meta.env.VITE_SOCKET_URL) {
+  if (!readEnvString(import.meta.env.VITE_SOCKET_URL)) {
     console.warn(
       "[env] VITE_SOCKET_URL is not set – falling back to localhost:3001.\n" +
         "Create a .env file based on .env.example to configure this."

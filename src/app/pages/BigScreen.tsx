@@ -9,10 +9,10 @@ import { getPublicSession } from "../api/liveSessionApi";
 import { toast } from "sonner";
 import { io, type Socket } from "socket.io-client";
 
-import { ENV_SOCKET_URL } from "../../config/env";
+import { config } from "../../config/env";
 
 function getSocketServerUrl() {
-  return ENV_SOCKET_URL;
+  return config.socketUrl;
 }
 
 function getPrimaryLabelAnswer(label: { acceptedAnswers?: string[]; prompt: string; marker: number }) {

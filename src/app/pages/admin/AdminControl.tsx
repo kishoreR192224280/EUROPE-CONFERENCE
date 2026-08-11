@@ -10,10 +10,10 @@ import { io, type Socket } from "socket.io-client";
 
 const MCQ_BAR_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
 
-import { ENV_SOCKET_URL } from "../../../config/env";
+import { config } from "../../../config/env";
 
 function getSocketServerUrl() {
-  return ENV_SOCKET_URL;
+  return config.socketUrl;
 }
 
 function shuffleMatchingPairs<T>(items: T[]) {

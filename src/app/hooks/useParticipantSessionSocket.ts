@@ -40,10 +40,10 @@ type UseParticipantSessionSocketOptions = {
   onAnswerCountUpdate?: (answeredParticipants: number, totalParticipants: number) => void;
 };
 
-import { ENV_SOCKET_URL } from "../../config/env";
+import { config } from "../../config/env";
 
 function getSocketServerUrl() {
-  return ENV_SOCKET_URL;
+  return config.socketUrl;
 }
 
 /** How often (ms) the client sends a heartbeat to the socket server while connected. */

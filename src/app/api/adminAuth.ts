@@ -1,6 +1,6 @@
-import { ENV_API_BASE_URL } from "../../config/env";
+import { config } from "../../config/env";
 
-export const BASE_URL = ENV_API_BASE_URL;
+export const BASE_URL = config.apiBaseUrl;
 type AdminAuthSuccess = {
   success: true;
   message: string;
