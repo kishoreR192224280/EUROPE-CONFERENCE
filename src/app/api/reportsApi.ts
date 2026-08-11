@@ -1,4 +1,4 @@
-import { BASE_URL } from "./adminAuth";
+import { BASE_URL, getAdminAuthHeaders } from "./adminAuth";
 
 type ApiFailure = {
   success: false;
@@ -42,6 +42,7 @@ type ReportsResponse =
 export async function getAdminReports() {
   const res = await fetch(BASE_URL + "get_reports.php", {
     method: "GET",
+    headers: getAdminAuthHeaders(),
     credentials: "include",
   });
 

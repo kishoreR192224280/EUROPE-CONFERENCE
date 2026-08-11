@@ -1,4 +1,4 @@
-import { BASE_URL } from "./adminAuth";
+import { BASE_URL, getAdminAuthHeaders } from "./adminAuth";
 import type { Question, Session } from "../context/SessionContext";
 
 type CreateSessionPayload = {
@@ -37,7 +37,7 @@ type CreateSessionResponse =
 export async function createSession(payload: CreateSessionPayload) {
   const res = await fetch(BASE_URL + "create_session.php", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getAdminAuthHeaders({ "Content-Type": "application/json" }),
     credentials: "include",
     body: JSON.stringify(payload),
   });
@@ -57,6 +57,7 @@ export async function uploadLabelImage(file: File) {
 
   const res = await fetch(BASE_URL + "upload_label_image.php", {
     method: "POST",
+    headers: getAdminAuthHeaders(),
     credentials: "include",
     body: formData,
   });

@@ -1,4 +1,4 @@
-import { BASE_URL } from "./adminAuth";
+import { BASE_URL, getAdminAuthHeaders } from "./adminAuth";
 import type { Session } from "../context/SessionContext";
 
 export const participantStorageKey = (code: string) => `participant:${code.toUpperCase()}`;
@@ -168,6 +168,7 @@ export async function getPublicSession(code: string, participantToken?: string, 
 export async function getAdminSession(sessionId: string | number) {
   const res = await fetch(BASE_URL + `get_admin_session.php?id=${encodeURIComponent(String(sessionId))}`, {
     method: "GET",
+    headers: getAdminAuthHeaders(),
     credentials: "include",
   });
 
@@ -185,7 +186,7 @@ export async function updateAdminSessionState(
 ) {
   const res = await fetch(BASE_URL + "update_session_state.php", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getAdminAuthHeaders({ "Content-Type": "application/json" }),
     credentials: "include",
     body: JSON.stringify({ sessionId, action }),
   });

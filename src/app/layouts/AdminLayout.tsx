@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router";
-import { ADMIN_USER_STORAGE_KEY, adminLogout } from "../api/adminAuth";
+import { ADMIN_AUTH_TOKEN_STORAGE_KEY, ADMIN_USER_STORAGE_KEY, adminLogout } from "../api/adminAuth";
 import { ACTIVE_ADMIN_SESSION_ID_STORAGE_KEY, useSession } from "../context/SessionContext";
 import { LayoutDashboard, PlusCircle, Radio, BarChart3, Settings, LogOut, Search, Bell, User } from "lucide-react";
 import { toast } from "sonner";
@@ -29,6 +29,7 @@ export function AdminLayout() {
       setAdminUser(JSON.parse(storedUser) as StoredAdminUser);
     } catch {
       localStorage.removeItem(ADMIN_USER_STORAGE_KEY);
+      localStorage.removeItem(ADMIN_AUTH_TOKEN_STORAGE_KEY);
     }
   }, []);
 
@@ -100,6 +101,7 @@ export function AdminLayout() {
             onClick={async () => {
               await adminLogout();
               localStorage.removeItem(ADMIN_USER_STORAGE_KEY);
+              localStorage.removeItem(ADMIN_AUTH_TOKEN_STORAGE_KEY);
               navigate("/");
             }}
             className="flex items-center gap-3 px-4 py-3 w-full text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors"
