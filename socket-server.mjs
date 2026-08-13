@@ -2,7 +2,17 @@ import { createServer } from "node:http";
 import { Server } from "socket.io";
 
 const PORT = Number(process.env.PORT || 3001);
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+const DEFAULT_CLIENT_ORIGINS = [
+  "https://qonnect-for-conference.vercel.app",
+  "https://europe-conference.vercel.app",
+  "http://localhost:5173",
+];
+const CLIENT_ORIGINS = String(
+  process.env.CLIENT_ORIGIN || process.env.ALLOWED_ORIGINS || DEFAULT_CLIENT_ORIGINS.join(",")
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost/WEBSITE-backend";
 const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS || 25000);
 const ADMIN_RECONNECT_GRACE_MS = Number(process.env.ADMIN_RECONNECT_GRACE_MS || 30000);
@@ -97,7 +107,20 @@ const httpServer = createServer((req, res) => {
 });
 const io = new Server(httpServer, {
   cors: {
-    origin: CLIENT_ORIGIN,
+    origin(origin, callback) {
+      // Allow non-browser / same-origin tools with no Origin header
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const isAllowed =
+        CLIENT_ORIGINS.includes(origin) ||
+        /^https:\/\/qonnect-for-conference(?:-[a-z0-9-]+)?\.vercel\.app$/.test(origin) ||
+        /^https:\/\/europe-conference(?:-[a-z0-9-]+)?\.vercel\.app$/.test(origin);
+
+      callback(isAllowed ? null : new Error(`CORS blocked for origin: ${origin}`), isAllowed);
+    },
     credentials: true,
   },
 });
