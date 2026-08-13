@@ -4,6 +4,7 @@ import { ADMIN_AUTH_TOKEN_STORAGE_KEY, ADMIN_USER_STORAGE_KEY, adminLogout } fro
 import { ACTIVE_ADMIN_SESSION_ID_STORAGE_KEY, useSession } from "../context/SessionContext";
 import { LayoutDashboard, PlusCircle, Radio, BarChart3, Settings, LogOut, Search, Bell, User } from "lucide-react";
 import { toast } from "sonner";
+import { QonnectLogo } from "../components/brand/QonnectLogo";
 
 type StoredAdminUser = {
   id: number;
@@ -52,15 +53,12 @@ export function AdminLayout() {
   ];
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-slate-50">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col fixed inset-y-0">
-        <div className="p-6 border-b border-gray-200">
+      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col fixed inset-y-0">
+        <div className="p-6 border-b border-slate-200">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">Q</div>
-            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
-              QuizAdmin
-            </span>
+            <QonnectLogo variant="full" className="h-8 w-auto" />
           </div>
         </div>
         
@@ -72,7 +70,7 @@ export function AdminLayout() {
                 to={item.href}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
                   location.pathname === item.href
-                    ? "bg-blue-50 text-blue-600 font-medium"
+                    ? "bg-orange-50 text-orange-500 font-medium"
                     : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
@@ -122,7 +120,7 @@ export function AdminLayout() {
               <input
                 type="text"
                 placeholder="Search sessions, reports..."
-                className="w-full pl-10 pr-4 py-2 bg-gray-100 border-none rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-2 bg-gray-100 border-none rounded-lg focus:ring-2 focus:ring-orange-500"
               />
             </div>
           </div>
@@ -137,7 +135,7 @@ export function AdminLayout() {
                 <p className="text-sm font-semibold">{adminUser?.name ?? "Admin User"}</p>
                 <p className="text-xs text-gray-500">Super Admin</p>
               </div>
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white border-2 border-white shadow-sm">
+              <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center text-white border-2 border-white shadow-sm">
                 <User size={20} />
               </div>
             </div>

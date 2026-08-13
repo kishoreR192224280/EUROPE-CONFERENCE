@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Qonnect">
+  <defs>
+    <linearGradient id="qonnectMarkBg" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F97316"/>
+      <stop offset="1" stop-color="#EA580C"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Soft rounded tile -->
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#qonnectMarkBg)"/>
+
+  <!-- Outer ring of the Q (connection loop) -->
+  <circle cx="30" cy="30" r="14" fill="none" stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round"/>
+
+  <!-- Q tail as a connecting link -->
+  <path
+    d="M38.5 38.5 L48 48"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="5.5"
+    stroke-linecap="round"
+  />
+
+  <!-- Coral connection nodes -->
+  <circle cx="22" cy="26" r="3.2" fill="#FB7185"/>
+  <circle cx="34" cy="22" r="2.4" fill="#FFF7ED" opacity="0.95"/>
+  <circle cx="48" cy="48" r="3.6" fill="#FB7185"/>
+
+  <!-- Tiny link between nodes inside the Q -->
+  <path
+    d="M24.8 25.2 L32.2 22.6"
+    fill="none"
+    stroke="#FFF7ED"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    opacity="0.9"
+  />
+</svg>

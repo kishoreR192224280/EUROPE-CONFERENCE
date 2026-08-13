@@ -24,6 +24,114 @@ import {
 import { toast } from "sonner";
 import { createSession, uploadLabelImage } from "../../api/sessionApi";
 
+const CREATE_SESSION_DRAFT_KEY = "qonnect:create-session-draft";
+
+type CreateSessionDraft = {
+  sessionInfo: {
+    title: string;
+    description: string;
+    videoLink: string;
+  };
+  questions: Question[];
+  savedAt: number;
+};
+
+function getApiOrigin() {
+  try {
+    return new URL(import.meta.env.VITE_API_BASE_URL || "http://localhost/WEBSITE-backend/", window.location.origin)
+      .origin;
+  } catch {
+    return window.location.origin;
+  }
+}
+
+function rewriteLocalUploadUrl(url?: string | null) {
+  if (!url) {
+    return url ?? "";
+  }
+
+  const markers = ["/WEBSITE-backend/uploads/", "/uploads/"];
+  for (const marker of markers) {
+    const markerIndex = url.indexOf(marker);
+    if (markerIndex === -1) {
+      continue;
+    }
+
+    // Keep production absolute URLs on their own host.
+    if (url.startsWith("https://") && !url.includes("localhost")) {
+      return url;
+    }
+
+    return `${getApiOrigin()}${url.slice(markerIndex)}`;
+  }
+
+  return url;
+}
+
+function normalizeDraftQuestions(questions: Question[]): Question[] {
+  return questions.map((question) => ({
+    ...question,
+    mediaUrl: rewriteLocalUploadUrl(question.mediaUrl),
+    matchingPairs: (question.matchingPairs ?? []).map((pair) => ({
+      ...pair,
+      leftImageUrl: rewriteLocalUploadUrl(pair.leftImageUrl),
+      rightImageUrl: rewriteLocalUploadUrl(pair.rightImageUrl),
+    })),
+  }));
+}
+
+function loadCreateSessionDraft(): CreateSessionDraft | null {
+  try {
+    const raw = localStorage.getItem(CREATE_SESSION_DRAFT_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as CreateSessionDraft;
+    if (!parsed || !Array.isArray(parsed.questions) || !parsed.sessionInfo) {
+      return null;
+    }
+
+    return {
+      ...parsed,
+      questions: normalizeDraftQuestions(parsed.questions),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveCreateSessionDraft(draft: Omit<CreateSessionDraft, "savedAt">) {
+  localStorage.setItem(
+    CREATE_SESSION_DRAFT_KEY,
+    JSON.stringify({
+      ...draft,
+      savedAt: Date.now(),
+    } satisfies CreateSessionDraft)
+  );
+}
+
+function clearCreateSessionDraft() {
+  localStorage.removeItem(CREATE_SESSION_DRAFT_KEY);
+}
+
+function getDefaultSessionInfo() {
+  return {
+    title: "Health Foundations Quiz",
+    description:
+      "A mixed-format health quiz with multiple choice, ordering, and image labeling for anatomy and clinical basics.",
+    videoLink: "",
+  };
+}
+
+function getDefaultQuestions(): Question[] {
+  return [
+    createSampleQuestion("multiple_choice", 0),
+    createSampleQuestion("sorting", 1),
+    createSampleQuestion("label_image", 2),
+  ];
+}
+
 function createSampleQuestion(type: QuestionType, index: number): Question {
   const base = {
     id: Math.random().toString(36).slice(2, 11),
@@ -331,7 +439,7 @@ function LabelImageEditor({
             onChange={(e) => onUpdate({ mediaUrl: e.target.value })}
             placeholder="https://... or upload from device"
             disabled={isUploadingImage}
-            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50"
+            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:bg-gray-50"
           />
         </div>
         <div className="flex items-end">
@@ -346,7 +454,7 @@ function LabelImageEditor({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploadingImage}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-50 px-4 py-2.5 font-semibold text-blue-600 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-xl bg-orange-50 px-4 py-2.5 font-semibold text-orange-500 transition-colors hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Upload size={18} />
             {isUploadingImage ? "Uploading..." : "Upload Image"}
@@ -370,7 +478,7 @@ function LabelImageEditor({
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploadingImage}
-          className="rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-full border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-600 transition-colors hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isUploadingImage ? "Uploading image..." : "Replace image"}
         </button>
@@ -386,7 +494,7 @@ function LabelImageEditor({
               <p className="text-sm font-semibold text-gray-800">Image Canvas</p>
               <p className="text-xs font-semibold text-gray-400">Click to add markers and drag them into place.</p>
             </div>
-            <div className="rounded-full bg-white px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-blue-600 shadow-sm">
+            <div className="rounded-full bg-white px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-orange-500 shadow-sm">
               {question.labels?.length ?? 0} item{(question.labels?.length ?? 0) === 1 ? "" : "s"}
             </div>
           </div>
@@ -402,10 +510,14 @@ function LabelImageEditor({
             className="relative aspect-[4/3] overflow-hidden rounded-[28px] bg-white"
           >
             {question.mediaUrl ? (
-              <img src={question.mediaUrl} alt="Question reference" className="h-full w-full object-contain" />
+              <img
+                src={rewriteLocalUploadUrl(question.mediaUrl)}
+                alt="Question reference"
+                className="h-full w-full object-contain"
+              />
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-blue-500">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-orange-50 text-orange-500">
                   <ImageIcon size={24} />
                 </div>
                 <p className="text-sm font-semibold text-gray-500">
@@ -428,8 +540,8 @@ function LabelImageEditor({
                 }}
                 className={`absolute flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[3px] text-lg font-black text-white shadow-lg transition-transform hover:scale-105 ${
                   selectedLabelId === label.id
-                    ? "border-blue-950 bg-blue-600 shadow-blue-300 ring-4 ring-blue-100"
-                    : "border-blue-900 bg-blue-500 shadow-blue-200"
+                    ? "border-orange-600 bg-orange-500 shadow-orange-200 ring-4 ring-orange-100"
+                    : "border-orange-500 bg-orange-500 shadow-orange-200"
                 }`}
                 style={{
                   left: `${label.x}%`,
@@ -466,20 +578,20 @@ function LabelImageEditor({
             <div
               key={label.id}
               className={`flex items-start gap-4 rounded-[28px] px-1 py-1 transition-colors ${
-                selectedLabelId === label.id ? "bg-blue-50/60" : ""
+                selectedLabelId === label.id ? "bg-orange-50/60" : ""
               }`}
               onClick={() => setSelectedLabelId(label.id)}
             >
               <div className="pt-7 text-base font-black text-gray-700">{label.marker}</div>
               <div
                 className={`flex-1 rounded-[26px] border bg-white px-4 py-3 shadow-sm transition-all ${
-                  selectedLabelId === label.id ? "border-blue-300 shadow-blue-100" : "border-gray-200"
+                  selectedLabelId === label.id ? "border-orange-300 shadow-orange-100" : "border-gray-200"
                 }`}
               >
                 <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400">Item {label.marker}</p>
                 <div
                   className={`flex min-h-[72px] flex-wrap content-start gap-2 rounded-2xl border px-3 py-3 transition-colors ${
-                    selectedLabelId === label.id ? "border-blue-200 bg-white" : "border-gray-100 bg-gray-50"
+                    selectedLabelId === label.id ? "border-orange-200 bg-white" : "border-gray-100 bg-gray-50"
                   }`}
                   onClick={() => {
                     setSelectedLabelId(label.id);
@@ -490,7 +602,7 @@ function LabelImageEditor({
                     <span
                       key={`${label.id}_answer_${chipIndex}`}
                       className={`inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1 text-sm font-medium ${
-                        chipIndex === 0 ? "bg-blue-100 text-blue-800" : "bg-slate-200 text-slate-700"
+                        chipIndex === 0 ? "bg-orange-100 text-orange-600" : "bg-slate-200 text-slate-700"
                       }`}
                     >
                       <span className="break-words">{answer}</span>
@@ -633,7 +745,7 @@ function MatchingEditor({
             Add one correct match per row. The order you define here is the answer key.
           </p>
         </div>
-        <div className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-blue-600">
+        <div className="rounded-full bg-orange-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-orange-500">
           {pairs.length} pair{pairs.length === 1 ? "" : "s"}
         </div>
       </div>
@@ -683,7 +795,7 @@ function MatchingEditor({
               {pair.leftImageUrl ? (
                 <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
                   <img
-                    src={pair.leftImageUrl}
+                    src={rewriteLocalUploadUrl(pair.leftImageUrl)}
                     alt={`Left match visual ${pairIndex + 1}`}
                     className="h-28 w-full object-contain bg-gray-50"
                   />
@@ -696,10 +808,10 @@ function MatchingEditor({
                     value={pair.leftText}
                     onChange={(e) => onUpdatePair(pair.id, { leftText: e.target.value })}
                     placeholder="Optional caption"
-                    className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-700 outline-none transition focus:ring-2 focus:ring-orange-500"
                   />
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">
+                  <div className="rounded-2xl border border-dashed border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-600">
                     This side will use the image only. Add text later only if you want a caption.
                   </div>
                 )
@@ -709,7 +821,7 @@ function MatchingEditor({
                   value={pair.leftText}
                   onChange={(e) => onUpdatePair(pair.id, { leftText: e.target.value })}
                   placeholder="e.g. Respiratory system"
-                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-700 outline-none transition focus:ring-2 focus:ring-orange-500"
                 />
               )}
             </div>
@@ -723,7 +835,7 @@ function MatchingEditor({
                 <label className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">
                   Match {String.fromCharCode(65 + pairIndex)}
                 </label>
-                <span className="rounded-full bg-violet-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-violet-600">
+                <span className="rounded-full bg-green-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-green-600">
                   Text only
                 </span>
               </div>
@@ -732,7 +844,7 @@ function MatchingEditor({
                 value={pair.rightText}
                 onChange={(e) => onUpdatePair(pair.id, { rightText: e.target.value })}
                 placeholder="e.g. Brings oxygen into the body"
-                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-700 outline-none transition focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-700 outline-none transition focus:ring-2 focus:ring-orange-500"
               />
               <p className="text-xs font-semibold text-gray-400">
                 Keep the right side as a text answer. Add visuals only on the left option side.
@@ -769,19 +881,38 @@ function MatchingEditor({
 export function CreateSession() {
   const navigate = useNavigate();
   const { setSession } = useSession();
+  const draft = loadCreateSessionDraft();
 
-  const [questions, setQuestions] = useState<Question[]>([
-    createSampleQuestion("multiple_choice", 0),
-    createSampleQuestion("sorting", 1),
-    createSampleQuestion("label_image", 2),
-  ]);
+  const [questions, setQuestions] = useState<Question[]>(
+    () => draft?.questions ?? getDefaultQuestions()
+  );
 
-  const [sessionInfo, setSessionInfo] = useState({
-    title: "Health Foundations Quiz",
-    description: "A mixed-format health quiz with multiple choice, ordering, and image labeling for anatomy and clinical basics.",
-    videoLink: "",
-  });
+  const [sessionInfo, setSessionInfo] = useState(
+    () => draft?.sessionInfo ?? getDefaultSessionInfo()
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [draftRestored] = useState(() => Boolean(draft));
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      saveCreateSessionDraft({ sessionInfo, questions });
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [sessionInfo, questions]);
+
+  useEffect(() => {
+    if (draftRestored) {
+      toast.message("Restored your unsaved Create Session draft");
+    }
+  }, [draftRestored]);
+
+  const clearDraftAndReset = () => {
+    clearCreateSessionDraft();
+    setSessionInfo(getDefaultSessionInfo());
+    setQuestions(getDefaultQuestions());
+    toast.success("Draft cleared");
+  };
 
   const addQuestion = (type: QuestionType) => {
     setQuestions((prev) => [...prev, emptyQuestion(type)]);
@@ -1030,6 +1161,7 @@ export function CreateSession() {
       });
 
       setSession(newSession);
+      clearCreateSessionDraft();
       toast.success(status === "draft" ? "Session draft saved successfully!" : "Session created successfully!");
       navigate(`/admin/session/${newSession.id}/success`);
     } catch (err) {
@@ -1048,6 +1180,14 @@ export function CreateSession() {
         </div>
         <div className="flex gap-3">
           <button
+            type="button"
+            onClick={clearDraftAndReset}
+            disabled={isSubmitting}
+            className="rounded-xl border border-gray-200 bg-white px-6 py-2.5 font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
+          >
+            Clear Draft
+          </button>
+          <button
             onClick={() => void handleSave("draft")}
             disabled={isSubmitting}
             className="rounded-xl border border-gray-200 bg-white px-6 py-2.5 font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
@@ -1057,7 +1197,7 @@ export function CreateSession() {
           <button
             onClick={() => void handleSave("waiting")}
             disabled={isSubmitting}
-            className="rounded-xl bg-blue-600 px-6 py-2.5 font-semibold text-white shadow-md shadow-blue-100 transition-colors hover:bg-blue-700 disabled:opacity-60"
+            className="rounded-xl bg-orange-500 px-6 py-2.5 font-semibold text-white shadow-md shadow-orange-100 transition-colors hover:bg-orange-600 disabled:opacity-60"
           >
             {isSubmitting ? "Saving..." : "Create Session"}
           </button>
@@ -1074,7 +1214,7 @@ export function CreateSession() {
                 type="text"
                 value={sessionInfo.title}
                 onChange={(e) => setSessionInfo({ ...sessionInfo, title: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
             <div className="space-y-2">
@@ -1085,7 +1225,7 @@ export function CreateSession() {
                   type="text"
                   value={sessionInfo.videoLink}
                   onChange={(e) => setSessionInfo({ ...sessionInfo, videoLink: e.target.value })}
-                  className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 outline-none focus:ring-2 focus:ring-orange-500"
                 />
               </div>
             </div>
@@ -1095,7 +1235,7 @@ export function CreateSession() {
                 rows={3}
                 value={sessionInfo.description}
                 onChange={(e) => setSessionInfo({ ...sessionInfo, description: e.target.value })}
-                className="w-full resize-none rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full resize-none rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
           </div>
@@ -1107,25 +1247,25 @@ export function CreateSession() {
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => addQuestion("multiple_choice")}
-                className="rounded-xl bg-blue-50 px-4 py-2 font-semibold text-blue-600 transition-colors hover:bg-blue-100"
+                className="rounded-xl bg-orange-50 px-4 py-2 font-semibold text-orange-500 transition-colors hover:bg-orange-100"
               >
                 Add MCQ
               </button>
               <button
                 onClick={() => addQuestion("sorting")}
-                className="rounded-xl bg-emerald-50 px-4 py-2 font-semibold text-emerald-600 transition-colors hover:bg-emerald-100"
+                className="rounded-xl bg-rose-50 px-4 py-2 font-semibold text-rose-400 transition-colors hover:bg-rose-100"
               >
                 Add Sorting
               </button>
               <button
                 onClick={() => addQuestion("label_image")}
-                className="rounded-xl bg-amber-50 px-4 py-2 font-semibold text-amber-600 transition-colors hover:bg-amber-100"
+                className="rounded-xl bg-amber-50 px-4 py-2 font-semibold text-amber-500 transition-colors hover:bg-amber-100"
               >
                 Add Label Image
               </button>
               <button
                 onClick={() => addQuestion("matching")}
-                className="rounded-xl bg-violet-50 px-4 py-2 font-semibold text-violet-600 transition-colors hover:bg-violet-100"
+                className="rounded-xl bg-slate-100 px-4 py-2 font-semibold text-slate-600 transition-colors hover:bg-slate-200"
               >
                 Add Matching
               </button>
@@ -1207,7 +1347,7 @@ function QuestionCard({
     >
       <div className="flex cursor-pointer items-center gap-4 bg-gray-50 p-4" onClick={() => setIsExpanded(!isExpanded)}>
         <GripVertical className="cursor-grab text-gray-400" size={20} />
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500 text-sm font-bold text-white">
           {index + 1}
         </div>
         <div className="flex-1">
@@ -1237,7 +1377,7 @@ function QuestionCard({
               <select
                 value={question.questionType}
                 onChange={(e) => onUpdate(emptyQuestion(e.target.value as QuestionType))}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-orange-500"
               >
                 <option value="multiple_choice">Multiple Choice</option>
                 <option value="sorting">Sorting Steps in Order</option>
@@ -1251,7 +1391,7 @@ function QuestionCard({
                 type="text"
                 value={question.text}
                 onChange={(e) => onUpdate({ text: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
             <div className="space-y-2 md:col-span-2">
@@ -1260,7 +1400,7 @@ function QuestionCard({
                 type="text"
                 value={question.instructions ?? ""}
                 onChange={(e) => onUpdate({ instructions: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
           </div>
@@ -1270,7 +1410,7 @@ function QuestionCard({
               {question.options.map((option, i) => (
                 <div key={i} className="group relative">
                   <div className={`absolute left-4 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                    question.correctAnswer === i ? "bg-green-500 text-white" : "bg-gray-100 text-gray-500"
+                    question.correctAnswer === i ? "bg-green-600 text-white" : "bg-gray-100 text-gray-500"
                   }`}>
                     {String.fromCharCode(65 + i)}
                   </div>
@@ -1280,8 +1420,8 @@ function QuestionCard({
                     onChange={(e) => onUpdateOption(i, e.target.value)}
                     className={`w-full rounded-xl border py-3 pl-12 pr-12 outline-none transition-all ${
                       question.correctAnswer === i
-                        ? "border-green-500 bg-green-50/30 focus:ring-2 focus:ring-green-500"
-                        : "border-gray-200 focus:ring-2 focus:ring-blue-500"
+                        ? "border-green-600 bg-green-50/30 focus:ring-2 focus:ring-green-500"
+                        : "border-gray-200 focus:ring-2 focus:ring-orange-500"
                     }`}
                   />
                   <button
@@ -1289,7 +1429,7 @@ function QuestionCard({
                     className={`absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 transition-colors ${
                       question.correctAnswer === i
                         ? "bg-green-100 text-green-600"
-                        : "text-gray-300 hover:bg-green-50 hover:text-green-500"
+                        : "text-gray-300 hover:bg-green-50 hover:text-green-600"
                     }`}
                   >
                     <Check size={16} />
@@ -1305,14 +1445,14 @@ function QuestionCard({
                 <label className="text-sm font-semibold text-gray-700">Correct Order</label>
                 <button
                   onClick={onAddSortingItem}
-                  className="rounded-xl bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-600"
+                  className="rounded-xl bg-green-50 px-3 py-1.5 text-sm font-semibold text-green-600"
                 >
                   Add Step
                 </button>
               </div>
               {(question.items ?? []).map((item, itemIndex) => (
                 <div key={itemIndex} className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-sm font-black text-white">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-600 text-sm font-black text-white">
                     {itemIndex + 1}
                   </div>
                   <input
@@ -1370,7 +1510,7 @@ function QuestionCard({
               <input
                 type="checkbox"
                 id={`leaderboard-${question.id}`}
-                className="rounded text-blue-600"
+                className="rounded text-orange-500"
                 checked={question.showLeaderboardAfter}
                 onChange={(e) => onUpdate({ showLeaderboardAfter: e.target.checked })}
               />

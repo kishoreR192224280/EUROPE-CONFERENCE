@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Qonnect">
+  <defs>
+    <linearGradient id="faviconBg" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F97316"/>
+      <stop offset="1" stop-color="#EA580C"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="30" fill="url(#faviconBg)"/>
+  <circle cx="30" cy="30" r="13" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <path d="M38 38 L47 47" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="22" cy="26" r="3" fill="#FB7185"/>
+  <circle cx="34" cy="22" r="2.2" fill="#FFF7ED"/>
+  <circle cx="47" cy="47" r="3.4" fill="#FB7185"/>
+  <path d="M24.6 25.2 L32 22.7" fill="none" stroke="#FFF7ED" stroke-width="1.6" stroke-linecap="round"/>
+</svg>

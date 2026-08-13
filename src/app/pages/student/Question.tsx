@@ -110,7 +110,7 @@ function SortableSortingRow({
       className={`flex items-center gap-3 rounded-2xl border-2 border-gray-100 bg-white p-3.5 sm:p-4 transition-all ${isDragging ? "scale-[0.99] opacity-60 shadow-lg" : ""
         } ${hasSubmitted ? "" : "cursor-grab active:cursor-grabbing"}`}
     >
-      <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs sm:text-sm font-black text-white">
+      <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full bg-green-600 text-xs sm:text-sm font-black text-white">
         {index + 1}
       </div>
       <div className="flex-1 font-bold text-gray-800 text-sm sm:text-base min-w-0 break-words">{item}</div>
@@ -142,7 +142,7 @@ function SortableSortingRow({
           </button>
         </div>
       )}
-      <div className="hidden sm:block rounded-xl bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-600 shrink-0">
+      <div className="hidden sm:block rounded-xl bg-green-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-green-600 shrink-0">
         Drag
       </div>
     </div>
@@ -725,7 +725,7 @@ export function StudentQuestion() {
       return (
         <DndProvider backend={HTML5Backend}>
           <div className="space-y-3 sm:space-y-4">
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-xs sm:text-sm font-semibold text-emerald-700 leading-normal">
+            <div className="rounded-2xl border border-green-100 bg-green-50 px-4 py-2.5 text-xs sm:text-sm font-semibold text-green-700 leading-normal">
               Press buttons or drag each step to arrange the correct order.
             </div>
             {(sortingItems ?? []).map((item, index) => (
@@ -756,10 +756,10 @@ export function StudentQuestion() {
           <div className="overflow-hidden rounded-[2rem] border border-gray-100 bg-gray-50 p-3 sm:p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs sm:text-sm font-black uppercase tracking-[0.18em] text-blue-600">Image Reference</p>
+                <p className="text-xs sm:text-sm font-black uppercase tracking-[0.18em] text-orange-500">Image Reference</p>
                 <p className="text-[10px] sm:text-xs font-semibold text-gray-500">Tap numbered marker to label.</p>
               </div>
-              <div className="rounded-full bg-white px-2.5 py-1 text-[10px] sm:text-xs font-black uppercase tracking-[0.16em] text-blue-700 shadow-sm shrink-0">
+              <div className="rounded-full bg-white px-2.5 py-1 text-[10px] sm:text-xs font-black uppercase tracking-[0.16em] text-orange-600 shadow-sm shrink-0">
                 {filledLabelsCount}/{labels.length} filled
               </div>
             </div>
@@ -776,8 +776,8 @@ export function StudentQuestion() {
                     setSelectedLabelId(label.id);
                   }}
                   className={`absolute flex h-8 w-8 sm:h-10 sm:w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 text-xs sm:text-sm font-black text-white shadow-lg transition-all ${selectedLabelId === label.id
-                    ? "border-blue-950 bg-blue-700 ring-4 ring-blue-100 scale-105"
-                    : "border-blue-800 bg-blue-600"
+                    ? "border-orange-600 bg-orange-600 ring-4 ring-orange-100 scale-105"
+                    : "border-orange-500 bg-orange-500"
                     } ${hasSubmitted ? "cursor-default" : "cursor-pointer hover:scale-105"}`}
                   style={{ left: `${label.x}%`, top: `${label.y}%` }}
                 >
@@ -802,14 +802,14 @@ export function StudentQuestion() {
                     }}
                     className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${hasAnswerReveal && hasSubmittedAnswer
                       ? labelResult?.isCorrect
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        ? "border-green-200 bg-green-50 text-green-700"
                         : "border-rose-200 bg-rose-50 text-rose-700"
                       : hasValue
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        ? "border-green-200 bg-green-50 text-green-700"
                         : "border-gray-200 bg-gray-50 text-gray-700"
-                      } ${selectedLabelId === label.id ? "ring-2 ring-blue-200" : ""} disabled:cursor-default`}
+                      } ${selectedLabelId === label.id ? "ring-2 ring-orange-200" : ""} disabled:cursor-default`}
                   >
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[10px] font-black text-white">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-black text-white">
                       {label.marker}
                     </span>
                     <span>{hasValue ? labelAnswers[label.id] : `Item ${label.marker}`}</span>
@@ -827,14 +827,14 @@ export function StudentQuestion() {
           </div>
 
           {selectedLabel ? (
-            <div className="rounded-[2rem] border border-blue-100 bg-blue-50/50 p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-3 border-b border-blue-100 pb-3">
+            <div className="rounded-[2rem] border border-orange-100 bg-orange-50/50 p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3 border-b border-orange-100 pb-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white shrink-0">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-xs font-black text-white shrink-0">
                     {selectedLabel.marker}
                   </div>
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600 leading-none">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-500 leading-none">
                       Labeling Item {selectedLabel.marker}
                     </p>
                     <p className="text-[10px] font-semibold text-gray-500 mt-1">
@@ -850,7 +850,7 @@ export function StudentQuestion() {
                       const nextIndex = (currentIndex + 1) % labels.length;
                       setSelectedLabelId(labels[nextIndex].id);
                     }}
-                    className="rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-blue-700 shadow-sm border border-blue-100 hover:bg-blue-50 transition"
+                    className="rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-orange-600 shadow-sm border border-orange-100 hover:bg-orange-50 transition"
                   >
                     Next Marker
                   </button>
@@ -864,14 +864,14 @@ export function StudentQuestion() {
                   onChange={(e) => setLabelAnswers((prev) => ({ ...prev, [selectedLabel.id]: e.target.value }))}
                   disabled={hasSubmitted}
                   placeholder={`Answer for item ${selectedLabel.marker}...`}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 font-semibold text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 font-semibold text-sm outline-none focus:ring-2 focus:ring-orange-500 disabled:bg-gray-50"
                 />
                 {hasAnswerReveal ? (
                   <div className="space-y-1 text-xs font-semibold text-gray-500 pt-1">
                     <p>
                       Correct label: <span className="font-black text-gray-700">{getPrimaryLabelAnswer(selectedLabel)}</span>
                     </p>
-                    <p className={labelResultMap[selectedLabel.id]?.isCorrect ? "text-emerald-600" : "text-rose-600"}>
+                    <p className={labelResultMap[selectedLabel.id]?.isCorrect ? "text-green-600" : "text-rose-600"}>
                       {labelResultMap[selectedLabel.id]?.isCorrect
                         ? "✓ Matches the answer key."
                         : "✗ Does not match the answer key."}
@@ -898,7 +898,7 @@ export function StudentQuestion() {
 
       return (
         <div className="space-y-4">
-          <div className="rounded-[1.5rem] border border-violet-100 bg-violet-50 p-3.5 text-xs sm:text-sm font-semibold text-violet-700 leading-normal">
+          <div className="rounded-[1.5rem] border border-green-100 bg-green-50 p-3.5 text-xs sm:text-sm font-semibold text-green-700 leading-normal">
             Match every item on the left with the best option on the right.
           </div>
 
@@ -926,7 +926,7 @@ export function StudentQuestion() {
                     ) : null}
 
                     <div className="flex items-center gap-2.5">
-                      <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs sm:text-sm font-black text-white">
+                      <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-full bg-orange-500 text-xs sm:text-sm font-black text-white">
                         {index + 1}
                       </div>
                       <p className="text-sm sm:text-base font-black text-gray-900 leading-tight">{pair.leftText}</p>
@@ -943,9 +943,9 @@ export function StudentQuestion() {
                       }
                       className={`w-full rounded-xl border px-3 py-2.5 text-sm font-semibold outline-none transition ${hasAnswerReveal && hasSubmittedAnswer
                         ? result?.isCorrect
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          ? "border-green-200 bg-green-50 text-green-700"
                           : "border-rose-200 bg-rose-50 text-rose-700"
-                        : "border-gray-200 bg-white text-gray-700 focus:ring-2 focus:ring-violet-500"
+                        : "border-gray-200 bg-white text-gray-700 focus:ring-2 focus:ring-green-500"
                         }`}
                     >
                       <option value="">Select choice</option>
@@ -957,17 +957,17 @@ export function StudentQuestion() {
                     </select>
 
                     {selectedRightPair ? (
-                      <div className="rounded-xl border border-violet-100 bg-violet-50/50 px-3 py-2">
-                        <p className="text-[9px] font-black uppercase tracking-[0.16em] text-violet-500">Selected</p>
+                      <div className="rounded-xl border border-green-100 bg-green-50/50 px-3 py-2">
+                        <p className="text-[9px] font-black uppercase tracking-[0.16em] text-green-600">Selected</p>
                         <div className="mt-0.5 flex items-center gap-2">
                           {selectedRightPair.rightImageUrl ? (
                             <img
                               src={selectedRightPair.rightImageUrl}
                               alt={getMatchingOptionLabel(selectedRightPair)}
-                              className="h-8 w-8 rounded-lg border border-violet-100 bg-white object-cover"
+                              className="h-8 w-8 rounded-lg border border-green-100 bg-white object-cover"
                             />
                           ) : null}
-                          <p className="text-xs font-bold text-violet-900 truncate">
+                          <p className="text-xs font-bold text-green-800 truncate">
                             {getMatchingOptionLabel(
                               selectedRightPair,
                               orderedRightPairs.findIndex((candidate) => candidate.id === selectedRightPair.id)
@@ -978,7 +978,7 @@ export function StudentQuestion() {
                     ) : null}
 
                     {hasAnswerReveal && result ? (
-                      <div className={`rounded-xl px-3 py-2 text-xs font-semibold ${result.isCorrect ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+                      <div className={`rounded-xl px-3 py-2 text-xs font-semibold ${result.isCorrect ? "bg-green-50 text-green-700" : "bg-rose-50 text-rose-700"
                         }`}>
                         {result.isCorrect ? (
                           "Correct match."
@@ -1011,7 +1011,7 @@ export function StudentQuestion() {
               >
                 <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
                   <div>
-                    <p className="text-sm font-black uppercase tracking-[0.18em] text-violet-600">Image Preview</p>
+                    <p className="text-sm font-black uppercase tracking-[0.18em] text-green-600">Image Preview</p>
                     <p className="text-sm font-semibold text-gray-500">{matchingPreviewImage.title}</p>
                   </div>
                   <button
@@ -1044,13 +1044,13 @@ export function StudentQuestion() {
             disabled={hasSubmitted}
             onClick={() => setSelectedOption(i)}
             className={`group relative flex items-center gap-4 rounded-2xl border-2 p-4 sm:p-5 text-left font-bold transition-all ${selectedOption === i
-              ? "border-indigo-600 bg-indigo-50 text-indigo-600"
-              : "border-gray-100 bg-white text-gray-700 hover:border-indigo-200"
+              ? "border-orange-500 bg-orange-50 text-orange-500"
+              : "border-gray-100 bg-white text-gray-700 hover:border-orange-200"
               } ${hasSubmitted && selectedOption !== i ? "opacity-50" : ""}`}
           >
             <div className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${selectedOption === i
-              ? "border-indigo-600 bg-indigo-600 text-white"
-              : "border-gray-100 bg-gray-50 text-gray-400 group-hover:border-indigo-200"
+              ? "border-orange-500 bg-orange-600 text-white"
+              : "border-gray-100 bg-gray-50 text-gray-400 group-hover:border-orange-200"
               }`}>
               {String.fromCharCode(65 + i)}
             </div>
@@ -1111,17 +1111,17 @@ export function StudentQuestion() {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 p-4 sm:p-6 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-600 text-sm font-bold text-white">
             {currentSession.currentQuestionIndex + 1}
           </div>
           <div>
             <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-500">Question</span>
-            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">
+            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.18em] text-orange-500">
               {currentQuestion.questionType.replace(/_/g, " ")}
             </p>
           </div>
         </div>
-        <div className={`flex items-center gap-2 rounded-full px-2.5 py-1 font-bold text-sm sm:text-base ${timeLeft < 5 ? "animate-pulse bg-red-100 text-red-600" : "bg-indigo-100 text-indigo-600"
+        <div className={`flex items-center gap-2 rounded-full px-2.5 py-1 font-bold text-sm sm:text-base tabular-nums ${timeLeft < 5 ? "animate-pulse bg-red-100 text-red-600" : "bg-orange-100 text-orange-500"
           }`}>
           <Timer size={14} />
           <span>{timeLeft}s</span>
@@ -1130,7 +1130,7 @@ export function StudentQuestion() {
 
       <div className="flex min-h-0 flex-1 flex-col p-4 sm:p-6">
         {participantSocket.isReconnecting ? (
-          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 shadow-sm shrink-0">
+          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-green-700 shadow-sm shrink-0">
             <WifiOff size={18} className="shrink-0" />
             <div>
               <p className="text-sm font-black">Reconnecting...</p>
@@ -1139,7 +1139,7 @@ export function StudentQuestion() {
           </div>
         ) : null}
         {isSessionPaused ? (
-          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 shadow-sm shrink-0">
+          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-green-700 shadow-sm shrink-0">
             <WifiOff size={18} className="shrink-0" />
             <div>
               <p className="text-sm font-black">Host paused the quiz</p>
@@ -1174,7 +1174,7 @@ export function StudentQuestion() {
                   isSessionPaused ||
                   (currentQuestion.questionType === "multiple_choice" && selectedOption === null)
                   ? "cursor-not-allowed bg-gray-200"
-                  : "bg-indigo-600 shadow-indigo-200 hover:bg-indigo-700"
+                  : "bg-orange-600 shadow-orange-200 hover:bg-orange-600"
                   }`}
               >
                 {hasSubmitted
@@ -1200,8 +1200,8 @@ export function StudentQuestion() {
                 ? "bg-green-100 text-green-600 shadow-green-100"
                 : "bg-red-100 text-red-600 shadow-red-100"
               : isTimedOut
-                ? "bg-amber-100 text-amber-600 shadow-amber-100"
-                : "bg-indigo-100 text-indigo-600 shadow-indigo-100"
+                ? "bg-green-100 text-green-600 shadow-green-100"
+                : "bg-orange-100 text-orange-500 shadow-orange-100"
               }`}>
               {showRevealResult ? (
                 isCorrect ? <CheckCircle2 size={40} strokeWidth={3} /> : <XCircle size={40} strokeWidth={3} />
@@ -1215,8 +1215,8 @@ export function StudentQuestion() {
                 ? "text-green-600"
                 : "text-red-600"
               : isTimedOut
-                ? "text-amber-600"
-                : "text-indigo-600"
+                ? "text-green-600"
+                : "text-orange-500"
               }`}>
               {showRevealResult ? (isCorrect ? "Correct!" : "Keep Practicing") : isTimedOut ? "Time's Up" : "Answer Submitted"}
             </h2>
@@ -1267,7 +1267,7 @@ export function StudentQuestion() {
               </div>
             </div>
 
-            <p className="mt-8 animate-pulse text-xs sm:text-sm font-bold text-indigo-600 shrink-0">
+            <p className="mt-8 animate-pulse text-xs sm:text-sm font-bold text-orange-500 shrink-0">
               {showRevealResult ? "Waiting for the next question..." : "Wait for the next question..."}
             </p>
           </motion.div>
@@ -1277,7 +1277,7 @@ export function StudentQuestion() {
       <div className="mt-auto border-t border-gray-100 bg-gray-50 p-3 sm:p-4 shrink-0">
         <div className="h-1.5 sm:h-2 w-full overflow-hidden rounded-full bg-gray-200">
           <div
-            className="h-full bg-indigo-600 transition-all duration-500"
+            className="h-full bg-orange-600 transition-all duration-500"
             style={{ width: `${((currentSession.currentQuestionIndex + 1) / totalQuestions) * 100}%` }}
           ></div>
         </div>

@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { getAdminSession, updateAdminSessionState } from "../../api/liveSessionApi";
 import { io, type Socket } from "socket.io-client";
 
-const MCQ_BAR_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
+const MCQ_BAR_COLORS = ["#F97316", "#FB7185", "#F59E0B", "#64748B"];
 
 import { config } from "../../../config/env";
 
@@ -226,7 +226,7 @@ export function AdminControl() {
         <p className="mt-2 text-gray-500">Create a session or open one from the success screen to manage it here.</p>
         <Link
           to="/admin/create-session"
-          className="mt-6 inline-flex rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white"
+          className="mt-6 inline-flex rounded-xl bg-orange-500 px-5 py-3 font-semibold text-white"
         >
           Create Session
         </Link>
@@ -250,7 +250,7 @@ export function AdminControl() {
         <p className="mt-2 text-gray-500">{loadError}</p>
         <Link
           to="/admin/dashboard"
-          className="mt-6 inline-flex rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white"
+          className="mt-6 inline-flex rounded-xl bg-orange-500 px-5 py-3 font-semibold text-white"
         >
           Back to Dashboard
         </Link>
@@ -319,12 +319,12 @@ export function AdminControl() {
           </div>
           <div className="h-10 w-px bg-gray-100"></div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg font-bold">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-500 rounded-lg font-bold">
               <Users size={18} />
               <span>{currentSession.participants}</span>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg font-bold">
-              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-600 rounded-lg font-bold">
+              <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></div>
               <span className="capitalize">{currentSession.status}</span>
             </div>
           </div>
@@ -333,7 +333,7 @@ export function AdminControl() {
           <button 
             onClick={resumeSession}
             disabled={isBusy || !isSessionPaused}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-semibold transition-colors disabled:opacity-60"
+            className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 font-semibold transition-colors disabled:opacity-60"
           >
             Resume Session
           </button>
@@ -347,7 +347,7 @@ export function AdminControl() {
           <button 
             onClick={showLeaderboardView}
             disabled={isBusy}
-            className="px-4 py-2 bg-amber-500 text-white rounded-xl hover:bg-amber-600 font-semibold shadow-md shadow-amber-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60"
+            className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-600 font-semibold shadow-md shadow-green-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60"
           >
             <Award size={18} />
             Show Leaderboard
@@ -363,7 +363,7 @@ export function AdminControl() {
                 <motion.div 
                   initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  className="w-24 h-24 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center"
+                  className="w-24 h-24 bg-orange-50 text-orange-500 rounded-3xl flex items-center justify-center"
                 >
                   <Play size={48} fill="currentColor" className="ml-1" />
                 </motion.div>
@@ -376,7 +376,7 @@ export function AdminControl() {
                 <button 
                   onClick={launchQuestion}
                   disabled={isBusy}
-                  className="px-10 py-4 bg-indigo-600 text-white font-black text-lg rounded-2xl hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 flex items-center gap-3 active:scale-95 disabled:opacity-60"
+                  className="px-10 py-4 bg-orange-600 text-white font-black text-lg rounded-2xl hover:bg-orange-600 transition-all shadow-xl shadow-orange-200 flex items-center gap-3 active:scale-95 disabled:opacity-60"
                 >
                   Launch Question 1
                   <ArrowRight size={24} />
@@ -384,7 +384,7 @@ export function AdminControl() {
               </div>
             ) : currentSession.status === "paused" ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
-                <div className="w-24 h-24 bg-amber-50 text-amber-600 rounded-3xl flex items-center justify-center">
+                <div className="w-24 h-24 bg-green-50 text-green-600 rounded-3xl flex items-center justify-center">
                   <Pause size={48} fill="currentColor" />
                 </div>
                 <div className="max-w-lg">
@@ -397,7 +397,7 @@ export function AdminControl() {
                   <button 
                     onClick={resumeSession}
                     disabled={isBusy}
-                    className="px-10 py-4 bg-emerald-600 text-white font-black text-lg rounded-2xl hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 flex items-center gap-3 active:scale-95 disabled:opacity-60"
+                    className="px-10 py-4 bg-green-600 text-white font-black text-lg rounded-2xl hover:bg-green-700 transition-all shadow-xl shadow-green-100 flex items-center gap-3 active:scale-95 disabled:opacity-60"
                   >
                     Resume Session
                     <Play size={24} fill="currentColor" />
@@ -413,7 +413,7 @@ export function AdminControl() {
               </div>
             ) : currentSession.status === "ended" ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
-                <div className="w-24 h-24 bg-emerald-50 text-emerald-600 rounded-3xl flex items-center justify-center">
+                <div className="w-24 h-24 bg-green-50 text-green-600 rounded-3xl flex items-center justify-center">
                   <Award size={48} />
                 </div>
                 <div>
@@ -433,11 +433,11 @@ export function AdminControl() {
                 <div className="flex items-start justify-between mb-8">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-black uppercase tracking-wider">
+                      <span className="px-3 py-1 bg-orange-50 text-orange-500 rounded-lg text-xs font-black uppercase tracking-wider">
                         Question {currentSession.currentQuestionIndex + 1} of {currentSession.questions.length}
                       </span>
                       <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${
-                        isQuestionActive ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
+                        isQuestionActive ? "bg-green-50 text-green-600" : "bg-green-50 text-green-600"
                       }`}>
                         {isQuestionActive ? "Accepting Answers" : "Results Revealed"}
                       </span>
@@ -452,13 +452,13 @@ export function AdminControl() {
                   <div className="ml-8">
                     <motion.div 
                       key={timeLeft}
-                      initial={{ scale: 1.1, color: "#ef4444" }}
-                      animate={{ scale: 1, color: timeLeft < 5 ? "#ef4444" : "#4f46e5" }}
+                      initial={{ scale: 1.1, color: "#DC2626" }}
+                      animate={{ scale: 1, color: timeLeft < 5 ? "#DC2626" : "#F97316" }}
                       className={`w-24 h-24 rounded-3xl flex flex-col items-center justify-center border-4 ${
-                        timeLeft < 5 ? "border-red-500 text-red-500 animate-pulse" : "border-indigo-600 text-indigo-600"
+                        timeLeft < 5 ? "border-red-500 text-red-500 animate-pulse" : "border-orange-500 text-orange-500"
                       } bg-white shadow-xl shadow-gray-100`}
                     >
-                      <span className="text-4xl font-black">{timeLeft}</span>
+                      <span className="text-4xl font-black tabular-nums">{timeLeft}</span>
                       <span className="text-[10px] font-bold uppercase tracking-widest">Sec</span>
                     </motion.div>
                   </div>
@@ -470,7 +470,7 @@ export function AdminControl() {
                       <div className="mb-8 space-y-3">
                         {(currentQuestion.items ?? []).map((item, index) => (
                           <div key={`${item}-${index}`} className="flex items-center gap-4 rounded-2xl border-2 border-gray-50 bg-gray-50/50 p-5">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 font-black text-white shadow-sm">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-600 font-black text-white shadow-sm">
                               {index + 1}
                             </div>
                             <span className="font-bold text-gray-700">{item}</span>
@@ -480,12 +480,12 @@ export function AdminControl() {
                     ) : currentQuestion.questionType === "matching" ? (
                       <div className="mb-8 grid gap-5 lg:grid-cols-2">
                         <div className="rounded-3xl border border-gray-100 bg-gray-50 p-5">
-                          <p className="mb-4 text-xs font-black uppercase tracking-[0.18em] text-blue-600">Left Options</p>
+                          <p className="mb-4 text-xs font-black uppercase tracking-[0.18em] text-orange-500">Left Options</p>
                           <div className="space-y-3">
                             {matchingPairs.map((pair, index) => (
                               <div key={pair.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                                 <div className="flex items-start gap-3">
-                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-500 text-sm font-black text-white">
                                     {index + 1}
                                   </div>
                                   <div className="min-w-0 flex-1 space-y-3">
@@ -503,12 +503,12 @@ export function AdminControl() {
                         </div>
 
                         <div className="rounded-3xl border border-gray-100 bg-gray-50 p-5">
-                          <p className="mb-4 text-xs font-black uppercase tracking-[0.18em] text-violet-600">Match Bank</p>
+                          <p className="mb-4 text-xs font-black uppercase tracking-[0.18em] text-rose-400">Match Bank</p>
                           <div className="space-y-3">
                             {shuffledMatchingPairs.map((pair, index) => (
                               <div key={pair.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                                 <div className="flex items-start gap-3">
-                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm font-black text-white">
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-400 text-sm font-black text-white">
                                     {String.fromCharCode(65 + index)}
                                   </div>
                                   <div className="min-w-0 flex-1 space-y-3">
@@ -535,7 +535,7 @@ export function AdminControl() {
                             {(currentQuestion.labels ?? []).map((label) => (
                               <div
                                 key={label.id}
-                                className="absolute flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-blue-600 text-sm font-black text-white shadow-lg"
+                                className="absolute flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-orange-500 text-sm font-black text-white shadow-lg"
                                 style={{ left: `${label.x}%`, top: `${label.y}%` }}
                               >
                                 {label.marker}
@@ -546,7 +546,7 @@ export function AdminControl() {
                         <div className="space-y-3">
                           {(currentQuestion.labels ?? []).map((label) => (
                             <div key={label.id} className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
-                              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">Marker {label.marker}</p>
+                              <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-500">Marker {label.marker}</p>
                               <p className="mt-2 font-bold text-gray-800">{label.prompt}</p>
                             </div>
                           ))}
@@ -555,7 +555,7 @@ export function AdminControl() {
                     ) : (
                       <div className="mb-8 grid grid-cols-2 gap-4">
                         {currentQuestion.options.map((opt, i) => (
-                          <div key={i} className="flex items-center gap-4 rounded-2xl border-2 border-gray-50 bg-gray-50/50 p-5 transition-all hover:border-indigo-100">
+                          <div key={i} className="flex items-center gap-4 rounded-2xl border-2 border-gray-50 bg-gray-50/50 p-5 transition-all hover:border-orange-100">
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white font-black text-gray-400 shadow-sm">
                               {String.fromCharCode(65 + i)}
                             </div>
@@ -604,7 +604,7 @@ export function AdminControl() {
                               {mcqStats.map((entry, index) => (
                                 <Cell
                                   key={`cell-${index}`}
-                                  fill={entry.isCorrect ? "#10b981" : MCQ_BAR_COLORS[index % MCQ_BAR_COLORS.length]}
+                                  fill={entry.isCorrect ? "#16A34A" : MCQ_BAR_COLORS[index % MCQ_BAR_COLORS.length]}
                                   fillOpacity={entry.isCorrect ? 1 : 0.4}
                                 />
                               ))}
@@ -613,12 +613,12 @@ export function AdminControl() {
                         </ResponsiveContainer>
                       </div>
                     ) : currentQuestion.questionType === "sorting" ? (
-                      <div className="mb-8 rounded-3xl border border-emerald-100 bg-emerald-50 p-6">
-                        <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-600">Correct Order</p>
+                      <div className="mb-8 rounded-3xl border border-green-100 bg-green-50 p-6">
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-green-600">Correct Order</p>
                         <div className="mt-4 space-y-3">
                           {(currentQuestion.correctOrder ?? currentQuestion.items ?? []).map((item, index) => (
                             <div key={`${item}-${index}`} className="flex items-center gap-4 rounded-2xl bg-white px-4 py-3">
-                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-sm font-black text-white">
+                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-green-600 text-sm font-black text-white">
                                 {index + 1}
                               </div>
                               <span className="font-bold text-gray-800">{item}</span>
@@ -629,35 +629,35 @@ export function AdminControl() {
                     ) : currentQuestion.questionType === "matching" ? (
                       <div className="mb-8 space-y-4">
                         {matchingPairs.map((pair, index) => (
-                          <div key={pair.id} className="rounded-3xl border border-emerald-100 bg-emerald-50 p-5">
+                          <div key={pair.id} className="rounded-3xl border border-green-100 bg-green-50 p-5">
                             <div className="grid gap-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
                               <div className="space-y-3">
                                 <div className="flex items-center gap-3">
-                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-sm font-black text-white">
                                     {index + 1}
                                   </div>
                                   <p className="font-black text-gray-900">{pair.leftText}</p>
                                 </div>
                                 {pair.leftImageUrl ? (
-                                  <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-white">
+                                  <div className="overflow-hidden rounded-2xl border border-green-100 bg-white">
                                     <img src={pair.leftImageUrl} alt={pair.leftText} className="h-28 w-full object-contain" />
                                   </div>
                                 ) : null}
                               </div>
 
-                              <div className="mx-auto rounded-full bg-emerald-600 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-white">
+                              <div className="mx-auto rounded-full bg-green-600 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-white">
                                 Correct Match
                               </div>
 
                               <div className="space-y-3">
                                 <div className="flex items-center gap-3">
-                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-sm font-black text-white">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-600 text-sm font-black text-white">
                                     {String.fromCharCode(65 + index)}
                                   </div>
                                   <p className="font-black text-gray-900">{pair.rightText}</p>
                                 </div>
                                 {pair.rightImageUrl ? (
-                                  <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-white">
+                                  <div className="overflow-hidden rounded-2xl border border-green-100 bg-white">
                                     <img src={pair.rightImageUrl} alt={pair.rightText} className="h-28 w-full object-contain" />
                                   </div>
                                 ) : null}
@@ -676,7 +676,7 @@ export function AdminControl() {
                             {(currentQuestion.labels ?? []).map((label) => (
                               <div
                                 key={label.id}
-                                className="absolute flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-emerald-600 text-sm font-black text-white shadow-lg"
+                                className="absolute flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-green-600 text-sm font-black text-white shadow-lg"
                                 style={{ left: `${label.x}%`, top: `${label.y}%` }}
                               >
                                 {label.marker}
@@ -686,8 +686,8 @@ export function AdminControl() {
                         </div>
                         <div className="space-y-3">
                           {(currentQuestion.labels ?? []).map((label) => (
-                            <div key={label.id} className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
-                              <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-600">Marker {label.marker}</p>
+                            <div key={label.id} className="rounded-2xl border border-green-100 bg-green-50 p-4">
+                              <p className="text-xs font-black uppercase tracking-[0.18em] text-green-600">Marker {label.marker}</p>
                               <p className="mt-2 text-lg font-black text-gray-900">{label.acceptedAnswers?.[0] ?? label.prompt}</p>
                               <p className="mt-1 text-sm font-semibold text-gray-500">{label.prompt}</p>
                             </div>
@@ -700,7 +700,7 @@ export function AdminControl() {
                       <button 
                         onClick={shouldOfferLeaderboard ? showLeaderboardView : launchQuestion}
                         disabled={isBusy}
-                        className="px-10 py-4 bg-indigo-600 text-white font-black text-lg rounded-2xl hover:bg-indigo-700 transition-all flex items-center gap-3 shadow-xl shadow-indigo-100 active:scale-95 disabled:opacity-60"
+                        className="px-10 py-4 bg-orange-600 text-white font-black text-lg rounded-2xl hover:bg-orange-600 transition-all flex items-center gap-3 shadow-xl shadow-orange-100 active:scale-95 disabled:opacity-60"
                       >
                         {currentSession.currentQuestionIndex + 1 === currentSession.questions.length
                           ? "End session"
@@ -721,22 +721,22 @@ export function AdminControl() {
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
             <h3 className="font-black text-gray-900 mb-4 flex items-center justify-between">
               Live Feed
-              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px] font-black uppercase tracking-widest">
+              <span className="px-2 py-0.5 bg-orange-50 text-orange-500 rounded text-[10px] font-black uppercase tracking-widest">
                 {isQuestionActive ? "Voting Open" : "Standby"}
               </span>
             </h3>
             <div className="mb-4 grid grid-cols-3 gap-3">
-              <div className="rounded-xl bg-indigo-50 p-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Joined</p>
-                <p className="mt-1 text-xl font-black text-indigo-700">{liveMetrics.totalParticipants}</p>
+              <div className="rounded-xl bg-orange-50 p-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-orange-400">Joined</p>
+                <p className="mt-1 text-xl font-black tabular-nums text-orange-500">{liveMetrics.totalParticipants}</p>
               </div>
-              <div className="rounded-xl bg-emerald-50 p-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Answered</p>
-                <p className="mt-1 text-xl font-black text-emerald-700">{liveMetrics.answeredParticipants}</p>
+              <div className="rounded-xl bg-green-50 p-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-green-500">Answered</p>
+                <p className="mt-1 text-xl font-black tabular-nums text-green-600">{liveMetrics.answeredParticipants}</p>
               </div>
-              <div className="rounded-xl bg-amber-50 p-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">Waiting</p>
-                <p className="mt-1 text-xl font-black text-amber-700">{liveMetrics.waitingParticipants}</p>
+              <div className="rounded-xl bg-rose-50 p-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-rose-400">Waiting</p>
+                <p className="mt-1 text-xl font-black tabular-nums text-rose-500">{liveMetrics.waitingParticipants}</p>
               </div>
             </div>
             <div className="space-y-3 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
@@ -754,9 +754,9 @@ export function AdminControl() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.06 }}
                   key={entry.id} 
-                  className="flex items-center gap-3 rounded-2xl border border-transparent bg-gray-50 p-3 transition-all hover:border-indigo-100 hover:bg-white"
+                  className="flex items-center gap-3 rounded-2xl border border-transparent bg-gray-50 p-3 transition-all hover:border-orange-100 hover:bg-white"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-gradient-to-br from-indigo-500 to-purple-600 text-xs font-bold text-white shadow-sm">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-gradient-to-br from-orange-500 to-rose-400 text-xs font-bold text-white shadow-sm">
                     {entry.name
                       .split(" ")
                       .map((part) => part[0] ?? "")
@@ -768,7 +768,7 @@ export function AdminControl() {
                     <div className="flex items-center gap-2">
                       <p className="truncate text-xs font-black text-gray-900">{entry.name}</p>
                       {entry.selectedOptionIndex !== null ? (
-                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-indigo-600">
+                        <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-orange-500">
                           {String.fromCharCode(65 + entry.selectedOptionIndex)}
                         </span>
                       ) : null}
@@ -785,17 +785,17 @@ export function AdminControl() {
                     <span className="text-xs font-black text-gray-700">{entry.score} pts</span>
                     <div className="flex items-center gap-1">
                       {entry.presence === "active" ? (
-                        <CheckCircle2 size={14} className="text-emerald-500" />
+                        <CheckCircle2 size={14} className="text-green-600" />
                       ) : entry.presence === "waiting" ? (
-                        <Eye size={14} className="text-amber-500" />
+                        <Eye size={14} className="text-green-600" />
                       ) : (
                         <Clock3 size={14} className="text-gray-300" />
                       )}
                       <span className={`h-2 w-2 rounded-full ${
                         entry.presence === "active"
-                          ? "bg-emerald-500"
+                          ? "bg-green-600"
                           : entry.presence === "waiting"
-                            ? "bg-amber-400"
+                            ? "bg-green-600"
                             : "bg-gray-300"
                       }`}></span>
                     </div>
@@ -805,7 +805,7 @@ export function AdminControl() {
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-6 rounded-3xl text-white shadow-xl shadow-indigo-100 relative overflow-hidden group">
+          <div className="bg-gradient-to-br from-orange-500 to-orange-700 p-6 rounded-3xl text-white shadow-xl shadow-orange-100 relative overflow-hidden group">
             <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition-all"></div>
             <h3 className="font-black mb-4 relative z-10 flex items-center gap-2">
               <LayoutDashboard size={20} />

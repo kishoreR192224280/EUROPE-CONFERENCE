@@ -178,7 +178,7 @@ export function StudentWaiting() {
     return (
       <div className="flex min-h-[400px] items-center justify-center p-8 text-center">
         <div className="space-y-3">
-          <Loader2 className="mx-auto h-10 w-10 animate-spin text-indigo-600" />
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-orange-500" />
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-gray-400">
             Restoring your session...
           </p>
@@ -203,7 +203,7 @@ export function StudentWaiting() {
   return (
     <div className="flex-1 overflow-y-auto p-5 sm:p-8 flex flex-col items-center justify-between min-h-0 text-center">
       {participantSocket.isReconnecting ? (
-        <div className="mb-4 flex w-full max-w-sm items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-amber-800 shadow-sm shrink-0">
+        <div className="mb-4 flex w-full max-w-sm items-center gap-3 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-left text-green-700 shadow-sm shrink-0">
           <WifiOff size={18} className="shrink-0" />
           <div>
             <p className="text-sm font-black">Reconnecting...</p>
@@ -219,26 +219,26 @@ export function StudentWaiting() {
             rotate: [0, 3, -3, 0]
           }}
           transition={{ duration: 4, repeat: Infinity }}
-          className="w-24 h-24 sm:w-28 sm:h-28 bg-indigo-50 rounded-full flex items-center justify-center mb-6 sm:mb-8 relative shrink-0"
+          className="w-24 h-24 sm:w-28 sm:h-28 bg-orange-50 rounded-full flex items-center justify-center mb-6 sm:mb-8 relative shrink-0"
         >
-          <Loader2 className="w-12 h-12 sm:w-14 sm:h-14 text-indigo-600 animate-spin-slow" />
-          <div className="absolute top-0 right-0 w-7 h-7 sm:w-8 sm:h-8 bg-green-500 rounded-full border-4 border-white flex items-center justify-center text-white shadow-lg">
+          <Loader2 className="w-12 h-12 sm:w-14 sm:h-14 text-orange-500 animate-spin-slow" />
+          <div className="absolute top-0 right-0 w-7 h-7 sm:w-8 sm:h-8 bg-green-600 rounded-full border-4 border-white flex items-center justify-center text-white shadow-lg">
             <CheckCircle2 size={14} />
           </div>
         </motion.div>
 
         <div className="space-y-1.5">
           <h1 className="text-2xl sm:text-3xl font-black text-gray-900 leading-tight">You're In!</h1>
-          <p className="text-sm sm:text-base text-gray-500 font-medium">Session: <span className="font-bold text-indigo-600">{code}</span></p>
+          <p className="text-sm sm:text-base text-gray-500 font-medium">Session: <span className="font-bold text-orange-500">{code}</span></p>
         </div>
 
         <div className="mt-6 sm:mt-8 w-full max-w-[260px] sm:max-w-[280px] space-y-4 sm:space-y-6">
           <div className="p-4 sm:p-6 bg-gray-50 rounded-[2rem] sm:rounded-[2.5rem] border-2 border-dashed border-gray-200 flex flex-col items-center">
             <p className="text-xs sm:text-sm font-bold text-gray-400 uppercase tracking-widest mb-1.5 sm:mb-2">Waiting for Host</p>
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-indigo-600 rounded-full animate-pulse"></span>
-              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-indigo-600 rounded-full animate-pulse [animation-delay:0.2s]"></span>
-              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-indigo-600 rounded-full animate-pulse [animation-delay:0.4s]"></span>
+              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-orange-600 rounded-full animate-pulse"></span>
+              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-orange-600 rounded-full animate-pulse [animation-delay:0.2s]"></span>
+              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-orange-600 rounded-full animate-pulse [animation-delay:0.4s]"></span>
             </div>
           </div>
 
@@ -259,7 +259,7 @@ export function StudentWaiting() {
               initial={{ opacity: 0, x: -15 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.08 }}
-              className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-3 sm:border-4 border-white bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-[9px] sm:text-[10px] font-bold text-white shadow-md"
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-3 sm:border-4 border-white bg-gradient-to-br from-orange-500 to-rose-400 flex items-center justify-center text-[9px] sm:text-[10px] font-bold text-white shadow-md"
             >
               {String.fromCharCode(65 + i)}
             </motion.div>

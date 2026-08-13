@@ -176,7 +176,7 @@ export function StudentJoin() {
     <div className="flex-1 overflow-y-auto p-5 sm:p-8 flex flex-col justify-between min-h-0">
       <div className="flex-1 flex flex-col justify-center">
         <div className="text-center mb-6 sm:mb-8">
-          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-2xl sm:text-3xl font-bold mx-auto mb-3 sm:mb-4 shadow-xl shadow-indigo-100">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-orange-600 text-white rounded-2xl flex items-center justify-center text-2xl sm:text-3xl font-bold mx-auto mb-3 sm:mb-4 shadow-xl shadow-orange-100">
             Q
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-gray-900">
@@ -190,12 +190,12 @@ export function StudentJoin() {
         </div>
 
         {routeCode && (
-          <div className="mb-4 sm:mb-6 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 sm:px-5 sm:py-4">
+          <div className="mb-4 sm:mb-6 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3 sm:px-5 sm:py-4">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-500">Session Code</p>
-                <p className="mt-0.5 text-base sm:text-lg font-black text-indigo-900">{routeCode.toUpperCase()}</p>
-                <p className="mt-0.5 text-xs sm:text-sm text-indigo-700">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-orange-500">Session Code</p>
+                <p className="mt-0.5 text-base sm:text-lg font-black text-orange-500">{routeCode.toUpperCase()}</p>
+                <p className="mt-0.5 text-xs sm:text-sm text-orange-600">
                   {isCheckingSession
                     ? "Checking session details..."
                     : sessionTitle
@@ -208,7 +208,7 @@ export function StudentJoin() {
               <button
                 type="button"
                 onClick={() => navigate("/join")}
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-indigo-700 shadow-sm"
+                className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-orange-600 shadow-sm"
               >
                 <ArrowLeft size={14} />
                 Change
@@ -232,7 +232,7 @@ export function StudentJoin() {
                 className={`w-full pl-12 pr-4 py-3.5 sm:py-4 border-2 rounded-2xl outline-none transition-all font-black uppercase tracking-widest text-base sm:text-lg ${
                   routeCode
                     ? "bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed"
-                    : "bg-gray-50 border-gray-100 focus:border-indigo-600 focus:bg-white"
+                    : "bg-gray-50 border-gray-100 focus:border-orange-500 focus:bg-white"
                 }`}
                 required
               />
@@ -247,7 +247,7 @@ export function StudentJoin() {
                 placeholder="Full Name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full pl-12 pr-4 py-3.5 sm:py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-indigo-600 focus:bg-white outline-none transition-all font-bold text-sm sm:text-base"
+                className="w-full pl-12 pr-4 py-3.5 sm:py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-orange-500 focus:bg-white outline-none transition-all font-bold text-sm sm:text-base"
                 required
               />
             </div>
@@ -256,7 +256,7 @@ export function StudentJoin() {
               <div className="absolute left-4 top-[18px] text-gray-400">
                 <Phone size={20} />
               </div>
-              <div className="overflow-hidden rounded-2xl border-2 border-gray-100 bg-gray-50 pl-12 transition-all focus-within:border-indigo-600 focus-within:bg-white">
+              <div className="overflow-hidden rounded-2xl border-2 border-gray-100 bg-gray-50 pl-12 transition-all focus-within:border-orange-500 focus-within:bg-white">
                 <div className="grid grid-cols-[115px_1fr] sm:grid-cols-[135px_1fr]">
                   <div className="border-r border-gray-100">
                     <p className="px-3 pt-2 text-[9px] font-black uppercase tracking-[0.15em] text-gray-400">
@@ -304,7 +304,7 @@ export function StudentJoin() {
           <button
             type="submit"
             disabled={isLoading || isCheckingSession || isSessionUnavailable}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 sm:py-5 rounded-2xl shadow-xl shadow-indigo-200 transition-all flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed text-sm sm:text-base"
+            className="w-full bg-orange-600 hover:bg-orange-600 text-white font-black py-4 sm:py-5 rounded-2xl shadow-xl shadow-orange-200 transition-all flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed text-sm sm:text-base"
           >
             {isLoading ? (
               <div className="w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -321,7 +321,7 @@ export function StudentJoin() {
       <div className="mt-8 pt-6 border-t border-gray-100">
         <div className="flex items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-2xl">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-orange-100 text-orange-500 rounded-xl flex items-center justify-center shrink-0">
               <Users size={18} />
             </div>
             <div>

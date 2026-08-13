@@ -68,5 +68,33 @@ export async function uploadLabelImage(file: File) {
     throw new Error(data.success ? "Failed to upload image" : data.error);
   }
 
-  return data;
+  return {
+    ...data,
+    url: normalizeUploadedAssetUrl(data.url, data.path),
+  };
+}
+
+/** Prefer API-origin assets; rewrite stale socket/old hosts. */
+function normalizeUploadedAssetUrl(url: string, path: string) {
+  const apiOrigin = new URL(BASE_URL, window.location.origin).origin;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  try {
+    const parsed = new URL(url, apiOrigin);
+    const isStaleHost =
+      parsed.hostname.includes("conference-socket") ||
+      parsed.hostname === "europe-conference.onrender.com" ||
+      parsed.hostname.includes("103.249.82.251");
+
+    if (isStaleHost || parsed.origin !== apiOrigin) {
+      return `${apiOrigin}${normalizedPath}`;
+    }
+
+    return parsed.toString();
+  } catch {
+    if (url.startsWith("/")) {
+      return `${apiOrigin}${url}`;
+    }
+    return `${apiOrigin}${normalizedPath}`;
+  }
 }

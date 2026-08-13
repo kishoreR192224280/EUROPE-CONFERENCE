@@ -173,7 +173,7 @@ export function Dashboard() {
             <p className="mt-2 text-gray-500">{loadError}</p>
             <button
               onClick={() => void refreshDashboard()}
-              className="mt-4 rounded-xl bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700"
+              className="mt-4 rounded-xl bg-orange-500 px-4 py-2.5 font-semibold text-white hover:bg-orange-600"
             >
               Try Again
             </button>
@@ -204,28 +204,28 @@ export function Dashboard() {
       value: formatCompactNumber(reports.overview.totalStudents),
       helper: "Across all your sessions",
       icon: Users,
-      iconClass: "bg-violet-50 text-violet-600",
+      iconClass: "bg-orange-50 text-orange-500",
     },
     {
       label: "Average Score",
       value: `${avgScore.toFixed(1)}%`,
       helper: "Based on submitted answers",
       icon: BarChart3,
-      iconClass: "bg-amber-50 text-amber-600",
+      iconClass: "bg-rose-50 text-rose-400",
     },
     {
       label: "Total Sessions",
       value: formatCompactNumber(reports.overview.totalSessions),
       helper: `${liveOrRecentlyUsed} recent sessions with activity`,
       icon: FileText,
-      iconClass: "bg-blue-50 text-blue-600",
+      iconClass: "bg-slate-100 text-slate-600",
     },
     {
       label: "Students Per Session",
       value: formatCompactNumber(engagedStudents),
       helper: "Average participation depth",
       icon: TrendingUp,
-      iconClass: "bg-emerald-50 text-emerald-600",
+      iconClass: "bg-green-50 text-green-600",
     },
   ];
 
@@ -247,7 +247,7 @@ export function Dashboard() {
           </button>
           <button
             onClick={() => navigate("/admin/create-session")}
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 font-semibold text-white shadow-md shadow-blue-100 transition-all hover:bg-blue-700"
+            className="flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 font-semibold text-white shadow-md shadow-orange-100 transition-all hover:bg-orange-600"
           >
             <Plus size={20} />
             Create New Session
@@ -270,7 +270,7 @@ export function Dashboard() {
               </div>
             </div>
             <p className="text-sm font-semibold text-gray-500">{stat.label}</p>
-            <h3 className="mt-2 text-3xl font-bold tracking-tight text-gray-900">{stat.value}</h3>
+            <h3 className="mt-2 text-3xl font-bold tracking-tight tabular-nums text-gray-900">{stat.value}</h3>
             <p className="mt-2 text-xs font-medium text-gray-500">{stat.helper}</p>
           </motion.div>
         ))}
@@ -283,7 +283,7 @@ export function Dashboard() {
               <h3 className="font-bold text-gray-900">Session Activity</h3>
               <p className="text-sm text-gray-500">Sessions created over the last 7 days from your real data.</p>
             </div>
-            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-blue-600">
+            <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-orange-500">
               7 day view
             </span>
           </div>
@@ -308,17 +308,17 @@ export function Dashboard() {
                 <Line
                   type="monotone"
                   dataKey="sessions"
-                  stroke="#2563eb"
+                  stroke="#F97316"
                   strokeWidth={3}
-                  dot={{ r: 4, fill: "#2563eb" }}
+                  dot={{ r: 4, fill: "#F97316" }}
                   activeDot={{ r: 6 }}
                 />
                 <Line
                   type="monotone"
                   dataKey="participants"
-                  stroke="#10b981"
+                  stroke="#FB7185"
                   strokeWidth={2.5}
-                  dot={{ r: 3, fill: "#10b981" }}
+                  dot={{ r: 3, fill: "#FB7185" }}
                   activeDot={{ r: 5 }}
                 />
               </LineChart>
@@ -334,7 +334,7 @@ export function Dashboard() {
             </div>
             <button
               onClick={() => navigate("/admin/reports")}
-              className="text-sm font-semibold text-blue-600 hover:underline"
+              className="text-sm font-semibold text-orange-500 hover:underline"
             >
               View Reports
             </button>
@@ -356,7 +356,7 @@ export function Dashboard() {
                     <div className="min-w-0">
                       <button
                         onClick={() => navigate(`/admin/session/${session.id}/control`)}
-                        className="truncate text-left text-sm font-semibold text-gray-900 hover:text-blue-600"
+                        className="truncate text-left text-sm font-semibold text-gray-900 hover:text-orange-500"
                       >
                         {session.name}
                       </button>
@@ -373,10 +373,10 @@ export function Dashboard() {
                     <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-600">
                       {session.code}
                     </span>
-                    <span className="rounded bg-indigo-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-600">
+                    <span className="rounded bg-orange-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-500">
                       {formatStatusLabel(session.status)}
                     </span>
-                    <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600">
+                    <span className="rounded bg-green-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-green-600">
                       {session.avgAccuracy.toFixed(1)}% accuracy
                     </span>
                   </div>
@@ -388,7 +388,7 @@ export function Dashboard() {
       </div>
 
       {loadError ? (
-        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+        <div className="rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-medium text-green-600">
           Showing the last loaded dashboard snapshot. Refresh failed: {loadError}
         </div>
       ) : null}

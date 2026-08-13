@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { AlertCircle, CheckCircle, FileText, RefreshCw, TrendingUp, Users } from "lucide-react";
 import { getAdminReports, type ReportsPayload } from "../../api/reportsApi";
 
-const ACCURACY_COLORS = ["#10b981", "#ef4444"];
+const ACCURACY_COLORS = ["#16A34A", "#DC2626"];
 
 function formatReportDate(value: string | null) {
   if (!value) {
@@ -78,11 +78,11 @@ export function Reports() {
 
   const accuracyData = reports
     ? [
-        { name: "Correct", value: reports.overview.correctAnswers, color: "#10b981" },
+        { name: "Correct", value: reports.overview.correctAnswers, color: "#16A34A" },
         {
           name: "Incorrect",
           value: Math.max(0, reports.overview.totalAnswers - reports.overview.correctAnswers),
-          color: "#ef4444",
+          color: "#DC2626",
         },
       ]
     : [];
@@ -108,7 +108,7 @@ export function Reports() {
             <p className="mt-2 text-gray-500">{loadError}</p>
             <button
               onClick={() => void refreshReports()}
-              className="mt-4 rounded-xl bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700"
+              className="mt-4 rounded-xl bg-orange-500 px-4 py-2.5 font-semibold text-white hover:bg-orange-600"
             >
               Try Again
             </button>
@@ -142,8 +142,8 @@ export function Reports() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
           <p className="text-sm font-semibold uppercase tracking-wider text-gray-400">Overall Accuracy</p>
-          <h3 className="mt-2 text-3xl font-bold text-gray-900">{reports.overview.overallAccuracy.toFixed(1)}%</h3>
-          <p className="mt-2 flex items-center gap-1 text-xs font-bold text-emerald-600">
+          <h3 className="mt-2 text-3xl font-bold tabular-nums text-gray-900">{reports.overview.overallAccuracy.toFixed(1)}%</h3>
+          <p className="mt-2 flex items-center gap-1 text-xs font-bold text-green-600">
             <TrendingUp size={12} />
             Based on all submitted answers
           </p>
@@ -151,8 +151,8 @@ export function Reports() {
 
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
           <p className="text-sm font-semibold uppercase tracking-wider text-gray-400">Unique Students</p>
-          <h3 className="mt-2 text-3xl font-bold text-gray-900">{reports.overview.totalStudents}</h3>
-          <p className="mt-2 flex items-center gap-1 text-xs font-bold text-blue-600">
+          <h3 className="mt-2 text-3xl font-bold tabular-nums text-gray-900">{reports.overview.totalStudents}</h3>
+          <p className="mt-2 flex items-center gap-1 text-xs font-bold text-orange-500">
             <Users size={12} />
             Reused across multiple sessions
           </p>
@@ -160,8 +160,8 @@ export function Reports() {
 
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
           <p className="text-sm font-semibold uppercase tracking-wider text-gray-400">Total Sessions</p>
-          <h3 className="mt-2 text-3xl font-bold text-gray-900">{reports.overview.totalSessions}</h3>
-          <p className="mt-2 flex items-center gap-1 text-xs font-bold text-indigo-600">
+          <h3 className="mt-2 text-3xl font-bold tabular-nums text-gray-900">{reports.overview.totalSessions}</h3>
+          <p className="mt-2 flex items-center gap-1 text-xs font-bold text-orange-500">
             <FileText size={12} />
             Sessions created under this admin
           </p>
@@ -169,8 +169,8 @@ export function Reports() {
 
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
           <p className="text-sm font-semibold uppercase tracking-wider text-gray-400">Correct Answers</p>
-          <h3 className="mt-2 text-3xl font-bold text-gray-900">{reports.overview.correctAnswers}</h3>
-          <p className="mt-2 flex items-center gap-1 text-xs font-bold text-emerald-600">
+          <h3 className="mt-2 text-3xl font-bold tabular-nums text-gray-900">{reports.overview.correctAnswers}</h3>
+          <p className="mt-2 flex items-center gap-1 text-xs font-bold text-green-600">
             <CheckCircle size={12} />
             Out of {reports.overview.totalAnswers} answers recorded
           </p>
@@ -217,7 +217,7 @@ export function Reports() {
                     return row ? `${row.sessionTitle} • ${row.questionText}` : "";
                   }}
                 />
-                <Bar dataKey="accuracy" fill="#3b82f6" radius={[10, 10, 0, 0]} barSize={42} />
+                <Bar dataKey="accuracy" fill="#F97316" radius={[10, 10, 0, 0]} barSize={42} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -255,7 +255,7 @@ export function Reports() {
                   <tr key={session.id} className="transition-colors hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 text-orange-500">
                           <FileText size={18} />
                         </div>
                         <span className="font-semibold text-gray-900">{session.name}</span>
@@ -276,13 +276,13 @@ export function Reports() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="h-1.5 w-20 overflow-hidden rounded-full bg-gray-100">
-                          <div className="h-full rounded-full bg-green-500" style={{ width: `${session.avgAccuracy}%` }}></div>
+                          <div className="h-full rounded-full bg-green-600" style={{ width: `${session.avgAccuracy}%` }}></div>
                         </div>
                         <span className="text-sm font-bold text-gray-900">{session.avgAccuracy.toFixed(1)}%</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold capitalize tracking-wide text-indigo-600">
+                      <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold capitalize tracking-wide text-orange-500">
                         {formatStatusLabel(session.status)}
                       </span>
                     </td>
@@ -295,7 +295,7 @@ export function Reports() {
       </div>
 
       {loadError ? (
-        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+        <div className="rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-medium text-green-600">
           Showing last loaded report snapshot. Refresh failed: {loadError}
         </div>
       ) : null}

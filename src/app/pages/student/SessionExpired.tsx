@@ -21,18 +21,18 @@ export function StudentSessionExpired() {
   const normalizedCode = code?.toUpperCase() ?? "";
 
   return (
-    <div className="flex-1 overflow-y-auto p-5 sm:p-8 flex flex-col justify-between min-h-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white text-center">
+    <div className="flex-1 overflow-y-auto p-5 sm:p-8 flex flex-col justify-between min-h-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-900 text-white text-center">
       <div className="flex-1 flex flex-col justify-center py-4 sm:py-6">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           className="w-full flex flex-col items-center"
         >
-          <div className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/10 text-amber-300 shrink-0">
+          <div className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-300 shrink-0">
             <AlertTriangle size={28} />
           </div>
 
-          <p className="mt-4 sm:mt-5 text-[10px] sm:text-xs font-black uppercase tracking-[0.24em] text-amber-300">
+          <p className="mt-4 sm:mt-5 text-[10px] sm:text-xs font-black uppercase tracking-[0.24em] text-green-300">
             {isConnectionExpired ? "Connection expired" : "Session access revoked"}
           </p>
           <h1 className="mt-2.5 sm:mt-3 text-xl sm:text-2xl font-black tracking-tight leading-tight max-w-xs sm:max-w-none">
@@ -57,7 +57,7 @@ export function StudentSessionExpired() {
         <button
           type="button"
           onClick={() => navigate(code ? `/join/${code}` : "/join", { replace: true })}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3.5 sm:py-4 font-black text-white shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-500 active:scale-[0.98] text-sm sm:text-base"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-600 px-4 py-3.5 sm:py-4 font-black text-white shadow-lg shadow-orange-500/20 transition hover:bg-orange-500 active:scale-[0.98] text-sm sm:text-base"
         >
           <LogOut size={16} />
           Return to login

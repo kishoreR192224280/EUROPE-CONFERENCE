@@ -25,7 +25,7 @@ export function SessionSuccess() {
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-green-100"
+          className="w-20 h-20 bg-green-600 rounded-full flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-green-100"
         >
           <Check size={40} strokeWidth={3} />
         </motion.div>
@@ -43,13 +43,13 @@ export function SessionSuccess() {
         {/* Left: Code and QR */}
         <div className="space-y-6">
           <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-full -mr-16 -mt-16 transition-transform group-hover:scale-110"></div>
-            <p className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-4">Session Code</p>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-bl-full -mr-16 -mt-16 transition-transform group-hover:scale-110"></div>
+            <p className="text-sm font-bold text-orange-500 uppercase tracking-widest mb-4">Session Code</p>
             <div className="flex items-center justify-between gap-4">
               <span className="text-6xl font-black text-gray-900 tracking-tighter">{currentSession.code}</span>
               <button 
                 onClick={() => copyToClipboard(currentSession.code)}
-                className="p-3 bg-gray-50 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                className="p-3 bg-gray-50 text-gray-500 hover:text-orange-500 hover:bg-orange-50 rounded-xl transition-all"
               >
                 <Copy size={24} />
               </button>
@@ -63,7 +63,7 @@ export function SessionSuccess() {
             <div>
               <h3 className="font-bold text-gray-900 mb-2">Scan to Join</h3>
               <p className="text-sm text-gray-500 mb-4">Direct your students to scan this QR code to join instantly.</p>
-              <button className="flex items-center gap-2 text-blue-600 font-bold hover:underline">
+              <button className="flex items-center gap-2 text-orange-500 font-bold hover:underline">
                 <Share2 size={18} />
                 Download QR Code
               </button>
@@ -77,14 +77,14 @@ export function SessionSuccess() {
           
           <button 
             onClick={() => window.open(`/big-screen/${currentSession.code}`, '_blank')}
-            className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl hover:shadow-lg transition-all group"
+            className="w-full flex items-center gap-4 p-5 bg-gradient-to-r from-orange-500 to-rose-400 text-white rounded-2xl hover:shadow-lg transition-all group"
           >
             <div className="p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform">
               <Layout size={24} />
             </div>
             <div className="text-left">
               <p className="font-bold text-lg">Open Big Screen</p>
-              <p className="text-sm text-blue-100">Display for the audience/projector</p>
+              <p className="text-sm text-orange-100">Display for the audience/projector</p>
             </div>
           </button>
 
@@ -92,7 +92,7 @@ export function SessionSuccess() {
             onClick={() => navigate(`/admin/session/${currentSession.id}/control`)}
             className="w-full flex items-center gap-4 p-5 bg-white border border-gray-200 text-gray-900 rounded-2xl hover:bg-gray-50 transition-all group"
           >
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-110 transition-transform">
+            <div className="p-3 bg-orange-50 text-orange-500 rounded-xl group-hover:scale-110 transition-transform">
               <Play size={24} />
             </div>
             <div className="text-left">
@@ -112,7 +112,7 @@ export function SessionSuccess() {
               />
               <button 
                 onClick={() => copyToClipboard(joinLink)}
-                className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-600 hover:text-blue-600"
+                className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-600 hover:text-orange-500"
               >
                 <Copy size={16} />
               </button>
